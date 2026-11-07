@@ -1,0 +1,1259 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hutbe Ekranı</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Source+Sans+3:wght@400;500;600;700&family=Noto+Sans:wght@400;600&display=swap" rel="stylesheet">
+<style>/* Yerleşim: üstte ince komuta çubuğu; Yayın ekranında solda projeksiyonun aynısı ve kumanda, sağda imamın okuduğu metin */
+:root {
+  --teal: #1f5f63;
+  --teal-ink: #164649;
+  --brass: #b8913e;
+  --bg: #f3f5f3;
+  --surface: #ffffff;
+  --line: #dde3e0;
+  --fg: #1b2526;
+  --muted: #64716f;
+  --hover: #eef2f0;
+  --cur-bg: #fbf4e3;
+  --hit: #d6ecd9;
+  --live: #2f8a4c;
+  --danger: #b4392f;
+  --bar: #173f42;
+  --bar-fg: #e8f0ee;
+  --ui: 'Source Sans 3', 'Segoe UI', system-ui, sans-serif;
+  --text: 'Noto Sans', 'Segoe UI', Arial, sans-serif;
+  --arabic: 'Amiri', 'Traditional Arabic', serif;
+  --r: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --teal: #4fa3a6; --teal-ink: #8fd0d2; --brass: #d4ad5c; --bg: #111819; --surface: #182224; --line: #2a3739;
+    --fg: #e4ecea; --muted: #93a3a1; --hover: #1f2b2d; --cur-bg: #2b2716; --hit: #1f4a2c; --live: #56c27a; --danger: #e0685e;
+    --bar: #0c1314; --bar-fg: #dfe9e7; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --teal: #4fa3a6; --teal-ink: #8fd0d2; --brass: #d4ad5c; --bg: #111819; --surface: #182224; --line: #2a3739;
+  --fg: #e4ecea; --muted: #93a3a1; --hover: #1f2b2d; --cur-bg: #2b2716; --hit: #1f4a2c; --live: #56c27a; --danger: #e0685e;
+  --bar: #0c1314; --bar-fg: #dfe9e7; color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--fg); font: 15px/1.5 var(--ui); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bar); }
+h2, h3 { margin: 0; text-wrap: balance; }
+h2 { font-size: 20px; font-weight: 600; }
+h3 { font-size: 16px; font-weight: 600; }
+p { margin: 0; }
+.muted, .section-head p, .panel-head p { color: var(--muted); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+
+/* Düğmeler */
+button, .btn, select, input { font: inherit; color: inherit; }
+button, .btn { cursor: pointer; border-radius: 8px; padding: 8px 14px; border: 1px solid transparent; background: none; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.primary { background: var(--teal); color: #fff; }
+.primary:hover { background: var(--teal-ink); }
+.ghost { border-color: var(--line); background: var(--surface); }
+.ghost:hover { background: var(--hover); }
+.ghost.strong { border-color: var(--teal); color: var(--teal-ink); }
+select, input:not([type=checkbox]):not([type=file]) { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; min-width: 0; }
+.btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn-row.end { justify-content: flex-end; }
+
+/* Üst çubuk */
+.bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bar); color: var(--bar-fg); }
+.bar-inner { display: flex; align-items: center; gap: 24px; padding-block: 10px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.brand svg { width: 30px; height: 30px; flex: none; --teal: #7cc2c4; }
+.brand-text { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
+.brand-text strong { font-size: 16px; }
+.brand-text span { font-size: 13px; opacity: .7; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tabs { display: flex; gap: 2px; background: rgba(255,255,255,.07); padding: 3px; border-radius: 9px; }
+.tabs button { color: inherit; opacity: .75; padding: 6px 16px; border-radius: 7px; font-weight: 600; }
+.tabs button[aria-selected="true"] { background: rgba(255,255,255,.14); opacity: 1; }
+.mic { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; font-size: 13px; padding: 5px 12px; border-radius: 999px; background: rgba(255,255,255,.08); }
+.mic .dot, .listen .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; opacity: .5; }
+.mic[data-state="on"] { background: rgba(86,194,122,.18); color: #b9f0c9; }
+.mic[data-state="on"] .dot { background: #56c27a; opacity: 1; animation: pulse 1.6s infinite; }
+.mic[data-state="err"] { background: rgba(224,104,94,.2); color: #ffd1cc; }
+@keyframes pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .mic .dot { animation: none !important; } }
+
+main { padding-block: 20px 32px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); max-width: 1500px; margin: 0 auto; }
+
+/* Yayın */
+.live { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+@media (max-width: 980px) { .live { grid-template-columns: minmax(0, 1fr); } }
+.stage { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; min-width: 0; }
+.preview { position: relative; width: 100%; max-width: 100%; aspect-ratio: 16 / 9; border-radius: var(--r); overflow: hidden; background: #fbfaf6; box-shadow: 0 0 0 1px var(--line), 0 10px 30px -18px rgba(0,0,0,.4); }
+.preview iframe { position: absolute; top: 0; left: 0; width: 1600px; height: 900px; border: 0; transform-origin: 0 0; pointer-events: none; }
+.transport { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 10px 12px; }
+.round { width: 44px; height: 44px; padding: 0; justify-content: center; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); }
+.round:hover { background: var(--hover); }
+.round svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.listen { height: 44px; padding: 0 20px; border-radius: 999px; background: var(--live); color: #fff; font-size: 15px; }
+.listen .dot { background: #fff; opacity: .9; }
+.listen[data-on="true"] { background: var(--danger); }
+.listen[data-on="true"] .dot { border-radius: 2px; }
+.counter { display: flex; flex-direction: column; line-height: 1.15; padding-left: 6px; }
+.counter .k, .heard .k { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; }
+.counter .v { font-variant-numeric: tabular-nums; font-size: 17px; }
+.spacer { flex: 1; }
+.heard { display: flex; gap: 12px; align-items: baseline; padding: 0 4px; min-height: 1.5em; min-width: 0; }
+.heard .v { font-style: italic; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.hint { font-size: 13px; color: var(--muted); padding: 0 4px; }
+kbd { font: 600 12px var(--ui); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; background: var(--surface); }
+
+.script { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); display: flex; flex-direction: column; max-height: calc(100vh - 110px); min-width: 0; }
+.script-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.script-head span { font-size: 13px; color: var(--muted); }
+#liveList { list-style: none; margin: 0; padding: 6px; overflow: auto; }
+#liveList li { display: grid; grid-template-columns: 2.2em minmax(0, 1fr); gap: 6px; padding: 9px 10px; border-radius: 8px; cursor: pointer; font: 15px/1.5 var(--text); color: var(--fg); }
+#liveList li:hover { background: var(--hover); }
+#liveList li .n { color: var(--muted); font: 600 13px/1.9 var(--ui); font-variant-numeric: tabular-nums; }
+#liveList li.done { color: var(--muted); }
+#liveList li.cur { background: var(--cur-bg); box-shadow: inset 3px 0 0 var(--brass); }
+#liveList li.cur .n { color: var(--brass); }
+#liveList .w { border-radius: 3px; transition: background .2s; }
+#liveList .w.hit { background: var(--hit); }
+#liveList .empty-msg { cursor: default; color: var(--muted); display: block; padding: 16px; }
+
+/* Metinler */
+.section-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+.section-head > div:first-child { display: grid; gap: 4px; max-width: 60ch; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; margin-bottom: 16px; display: grid; gap: 14px; }
+.panel-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+.panel-head > div { display: grid; gap: 4px; max-width: 70ch; }
+.sources { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.sources label { display: grid; gap: 6px; font-weight: 600; font-size: 14px; }
+.sources label small { font-weight: 400; color: var(--muted); }
+.sources textarea { min-height: 160px; resize: vertical; font: 14px/1.5 var(--text); padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--fg); }
+textarea[dir=rtl] { font-family: var(--arabic); font-size: 18px; }
+.note { background: var(--cur-bg); border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; font-size: 14px; }
+
+.table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
+.table-wrap.flat { background: none; }
+#rowsTable { border-collapse: collapse; width: 100%; min-width: 760px; }
+#rowsTable th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); font-weight: 600; padding: 10px; border-bottom: 1px solid var(--line); background: var(--surface); }
+#rowsTable td { padding: 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+#rowsTable tr:last-child td { border-bottom: 0; }
+#rowsTable td.idx { width: 3em; text-align: center; color: var(--muted); font-variant-numeric: tabular-nums; padding-top: 12px; }
+#rowsTable textarea { width: 100%; min-height: 58px; border: 1px solid transparent; border-radius: 6px; padding: 6px 8px; font: 14px/1.45 var(--text); resize: vertical; background: transparent; color: var(--fg); field-sizing: content; }
+#rowsTable textarea[dir=rtl] { font-family: var(--arabic); font-size: 18px; }
+#rowsTable textarea:hover { border-color: var(--line); }
+#rowsTable textarea:focus { border-color: var(--teal); background: var(--bg); outline: none; }
+#rowsTable textarea.empty { background: color-mix(in srgb, var(--danger) 8%, transparent); }
+.tools { display: flex; gap: 4px; opacity: 0; transition: opacity .15s; padding: 2px 4px 0; }
+#rowsTable td:hover .tools, #rowsTable td:focus-within .tools, #rowsTable tr:hover td.rowtools .tools { opacity: 1; }
+@media (hover: none) { .tools { opacity: 1; } }
+.tools button { padding: 2px 8px; font-size: 12px; font-weight: 500; color: var(--muted); border: 1px solid var(--line); background: var(--surface); border-radius: 6px; }
+.tools button:hover { color: var(--fg); background: var(--hover); }
+.tools button.del:hover { color: var(--danger); }
+td.rowtools { width: 1%; }
+td.rowtools .tools { flex-direction: column; padding-top: 6px; }
+
+/* Ayarlar */
+.settings { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+@media (max-width: 860px) { .settings { grid-template-columns: minmax(0, 1fr); } }
+.group { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 18px; display: grid; gap: 14px; min-width: 0; }
+.group.wide { grid-column: 1 / -1; }
+.field { display: grid; gap: 6px; }
+.field label, .field .label { font-size: 13px; font-weight: 600; color: var(--muted); }
+.field.row2 { grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 16px; }
+.check { display: flex; align-items: center; gap: 8px; font-size: 14px; padding-bottom: 8px; }
+.logo-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.logo-box { width: 120px; height: 56px; border: 1px dashed var(--line); border-radius: 8px; display: grid; place-items: center; padding: 4px; background: #fbfaf6; }
+.logo-box img { max-height: 46px; max-width: 110px; object-fit: contain; }
+table.langs { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 640px; }
+table.langs th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); font-weight: 600; padding: 6px; }
+table.langs td { padding: 6px; border-top: 1px solid var(--line); }
+table.langs input[type=text] { width: 100%; }
+table.langs input[type=number] { width: 70px; }
+table.langs .badge { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--brass); }
+.order { display: flex; gap: 2px; }
+.order button, .langs .x { padding: 2px 7px; border: 1px solid var(--line); background: var(--surface); border-radius: 6px; font-weight: 500; }
+.order button:disabled, .langs .x:disabled { opacity: .35; cursor: default; }
+.add-lang { display: flex; gap: 8px; flex-wrap: wrap; }
+.add-lang input { flex: 1 1 140px; }
+
+/* Bildirim ve onay */
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(20px + env(safe-area-inset-bottom, 0px)); background: var(--fg); color: var(--bg); padding: 10px 18px; border-radius: 8px; font-size: 14px; z-index: 20; max-width: calc(100% - 32px); box-shadow: 0 8px 24px -10px rgba(0,0,0,.5); }
+.ask { position: fixed; inset: 0; background: rgba(10,20,20,.45); display: grid; place-items: center; z-index: 30; padding: 16px; }
+.ask-box { background: var(--surface); border-radius: 12px; padding: 20px; max-width: 420px; width: 100%; display: grid; gap: 18px; box-shadow: 0 20px 50px -20px rgba(0,0,0,.6); }
+.ask-box p { font-size: 15px; }
+</style>
+<script>// İnternet sitesinde (github.io) girişte şifre sorar. Bilgisayardan çift tıklayarak açınca sormaz.
+// Not: Bu, sayfayı rastgele ziyaretçilerden saklar; dosyaların kendisi yine herkese açık bir sunucudadır.
+(function () {
+  'use strict';
+  const HASH = '39eb921045bbfb5adedff3b55b02c16f347b13ed9551971e4c5ece936ffbe62d'; // şifrenin SHA-256 özeti
+  const KEY = 'hutbe-ekran.giris';
+  if (!/\.github\.io$/.test(location.hostname)) return;
+  try { if (localStorage.getItem(KEY) === HASH) return; } catch (e) { /* kayıt yok */ }
+
+  document.documentElement.classList.add('locked');
+  const css = document.createElement('style');
+  css.textContent = `
+    html.locked body > *:not(#gate) { display: none !important; }
+    #gate { position: fixed; inset: 0; display: grid; place-items: center; background: #173f42; z-index: 100; padding: 16px; font-family: 'Source Sans 3', 'Segoe UI', system-ui, sans-serif; }
+    #gate form { background: #fff; color: #1b2526; border-radius: 12px; padding: 28px; width: 100%; max-width: 360px; display: grid; gap: 14px; box-shadow: 0 20px 50px -20px rgba(0,0,0,.6); }
+    #gate h1 { margin: 0; font-size: 20px; }
+    #gate p { margin: 0; color: #64716f; font-size: 14px; }
+    #gate input { font: inherit; padding: 10px 12px; border: 1px solid #dde3e0; border-radius: 8px; }
+    #gate button { font: inherit; font-weight: 600; padding: 10px; border: 0; border-radius: 8px; background: #1f5f63; color: #fff; cursor: pointer; }
+    #gate .err { color: #b4392f; min-height: 1.2em; }`;
+  document.head.appendChild(css);
+
+  function show() {
+    const g = document.createElement('div');
+    g.id = 'gate';
+    g.innerHTML = `<form><h1>Hutbe Ekranı</h1><p>Devam etmek için şifreyi girin.</p>
+      <input type="password" id="gatePw" autocomplete="current-password" aria-label="Şifre" required>
+      <button type="submit">Giriş</button><p class="err" id="gateErr" role="alert"></p></form>`;
+    document.body.appendChild(g);
+    g.querySelector('input').focus();
+    g.querySelector('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const pw = g.querySelector('input').value.trim();
+      const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pw));
+      const hex = Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
+      if (hex === HASH) {
+        try { localStorage.setItem(KEY, HASH); } catch (err) { /* hatırlanamadı */ }
+        g.remove();
+        document.documentElement.classList.remove('locked');
+        window.dispatchEvent(new Event('resize'));
+      } else {
+        g.querySelector('#gateErr').textContent = 'Şifre yanlış.';
+      }
+    });
+  }
+  if (document.body) show(); else document.addEventListener('DOMContentLoaded', show);
+})();
+</script>
+</head>
+<body>
+<header class="bar">
+  <div class="bar-inner">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M20 3a13 13 0 1 0 9 22A11 11 0 1 1 20 3z" fill="var(--brass)"/><path d="M11 25v-6q4-5 8 0v6z" fill="var(--teal)"/></svg>
+      <div class="brand-text">
+        <strong>Hutbe Ekranı</strong>
+        <span id="hutbeName">Hutbe yüklenmedi</span>
+      </div>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="Bölümler">
+      <button role="tab" data-tab="live" aria-selected="true">Yayın</button>
+      <button role="tab" data-tab="texts" aria-selected="false">Metinler</button>
+      <button role="tab" data-tab="settings" aria-selected="false">Ayarlar</button>
+    </nav>
+    <div class="mic" id="micPill" data-state="off"><span class="dot"></span><span id="micText">Mikrofon kapalı</span></div>
+  </div>
+</header>
+
+<main>
+  <!-- YAYIN -->
+  <section id="tab-live" class="tab live" role="tabpanel">
+    <div class="stage">
+      <div class="preview"><iframe id="preview" title="Projeksiyon önizlemesi" tabindex="-1"></iframe></div>
+      <div class="transport">
+        <button id="btnPrev" class="round" aria-label="Önceki cümle" title="Önceki (←)"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+        <button id="btnListen" class="listen" data-on="false"><span class="dot"></span><span class="lbl">Dinlemeyi başlat</span></button>
+        <button id="btnNext" class="round" aria-label="Sonraki cümle" title="Sonraki (→)"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
+        <div class="counter"><span class="k">Cümle</span><span class="v"><b id="curNo">–</b> / <span id="total">–</span></span></div>
+        <div class="spacer"></div>
+        <button id="btnFirst" class="ghost">Başa dön</button>
+        <button id="btnOpen" class="ghost strong">Projeksiyonu aç</button>
+      </div>
+      <div class="heard" aria-live="polite"><span class="k">Duyulan</span><span id="heard" class="v">—</span></div>
+      <p class="hint">Kısayollar: <kbd>→</kbd> veya <kbd>Boşluk</kbd> sonraki, <kbd>←</kbd> önceki, <kbd>B</kbd> başa. Listeden bir cümleye tıklayarak da oraya geçebilirsiniz.</p>
+    </div>
+    <aside class="script">
+      <div class="script-head"><h2>Hutbe metni</h2><span id="trackLabel">Türkçe · imamın okuduğu</span></div>
+      <ol id="liveList"></ol>
+    </aside>
+  </section>
+
+  <!-- METİNLER -->
+  <section id="tab-texts" class="tab" role="tabpanel" hidden>
+    <div class="section-head">
+      <div>
+        <h2>Metinler ve eşleme</h2>
+        <p>Her satır ekranda birlikte gösterilen cümlelerdir. Bir hücreye tıklayıp metni düzeltebilirsiniz.</p>
+      </div>
+      <div class="actions">
+        <label class="sr" for="readyList">Hazır hutbe</label>
+        <select id="readyList"></select>
+        <button id="btnReady" class="primary">Yükle</button>
+        <button id="btnNew" class="ghost">Yeni hutbe gir</button>
+      </div>
+    </div>
+
+    <div id="newPanel" class="panel" hidden>
+      <div class="panel-head">
+        <div>
+          <h3>Yeni hutbe</h3>
+          <p>Her dilin metnini kendi kutusuna yapıştırın, sonra <b>Otomatik eşle</b>'ye basın. Diyanet'in Word dosyasındaki tarih satırı ve dipnot numaraları kendiliğinden temizlenir.</p>
+        </div>
+        <button id="btnAlign" class="primary">Otomatik eşle</button>
+      </div>
+      <div id="sources" class="sources"></div>
+    </div>
+
+    <p id="alignInfo" class="note" hidden></p>
+    <div class="table-wrap"><table id="rowsTable"></table></div>
+  </section>
+
+  <!-- AYARLAR -->
+  <section id="tab-settings" class="tab" role="tabpanel" hidden>
+    <div class="settings">
+      <div class="group">
+        <h3>Ekran</h3>
+        <div class="field"><label for="optTitle">Başlık</label><input id="optTitle"></div>
+        <div class="field">
+          <span class="label">Logo</span>
+          <div class="logo-row">
+            <div class="logo-box"><img id="logoPrev" alt="Logo önizlemesi"></div>
+            <label class="btn ghost" for="optLogo">Logo seç</label>
+            <input type="file" id="optLogo" accept="image/*" class="sr">
+            <button id="btnLogoReset" class="ghost">Varsayılana dön</button>
+          </div>
+        </div>
+        <div class="field row2">
+          <div><label for="optPer">Ekranda aynı anda kaç cümle</label><input type="number" id="optPer" min="1" max="6"></div>
+          <label class="check"><input type="checkbox" id="optNums"> Cümle numaralarını göster</label>
+        </div>
+      </div>
+
+      <div class="group wide">
+        <h3>Diller</h3>
+        <p class="muted">Sıra, ekrandaki sıradır. <b>Takip</b> dili imamın okuduğu dildir ve ekranda gösterilmesi gerekmez.</p>
+        <div class="table-wrap flat"><table id="langTable" class="langs"></table></div>
+        <form id="addLang" class="add-lang">
+          <input id="newLangName" placeholder="Dil adı, ör. Rusça" required>
+          <input id="newLangCode" placeholder="Kod, ör. ru" required size="5">
+          <select id="newLangDir"><option value="ltr">Soldan sağa</option><option value="rtl">Sağdan sola</option></select>
+          <button class="ghost" type="submit">Dil ekle</button>
+        </form>
+      </div>
+
+      <div class="group">
+        <h3>Dosya</h3>
+        <p class="muted">Hazırladığınız hutbeyi dosyaya kaydedip başka bilgisayarda açabilirsiniz.</p>
+        <div class="btn-row">
+          <button id="btnExport" class="ghost">Dışa aktar</button>
+          <label class="btn ghost" for="fileImport">İçe aktar</label>
+          <input type="file" id="fileImport" accept=".json,application/json" class="sr">
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="toast" class="toast" role="status" hidden></div>
+<div id="ask" class="ask" hidden>
+  <div class="ask-box" role="dialog" aria-modal="true" aria-labelledby="askText">
+    <p id="askText"></p>
+    <div class="btn-row end"><button id="askNo" class="ghost">Vazgeç</button><button id="askYes" class="primary">Tamam</button></div>
+  </div>
+</div>
+
+<script>// Ortak ayarlar ve kayıt
+(function (root) {
+  'use strict';
+  const KEY = 'hutbe-ekran.v1';
+
+  const DEFAULT = {
+    title: 'Cuma Hutbesi',
+    logo: null, // data URL; boşsa varsayılan hilal-cami simgesi
+    trackLang: 'tr',
+    perPage: 3,
+    showNumbers: true,
+    languages: [
+      { code: 'tr', name: 'Türkçe', dir: 'ltr', show: false, size: 1, speech: 'tr-TR' },
+      { code: 'ar', name: 'Arapça', dir: 'rtl', show: true, size: 1.3, speech: 'ar-SA' },
+      { code: 'mn', name: 'Moğolca', dir: 'ltr', show: true, size: 1, speech: 'mn-MN' },
+      { code: 'en', name: 'İngilizce', dir: 'ltr', show: true, size: 0.9, speech: 'en-US' },
+    ],
+    sources: { tr: '', ar: '', mn: '', en: '' },
+    rows: [],
+    current: 0,
+  };
+
+  function clone(x) { return JSON.parse(JSON.stringify(x)); }
+
+  function load() {
+    try {
+      const raw = localStorage.getItem(KEY);
+      if (raw) return Object.assign(clone(DEFAULT), JSON.parse(raw));
+    } catch (e) { /* kayıt okunamadı */ }
+    return clone(DEFAULT);
+  }
+
+  function save(state) {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { console.warn('Kaydedilemedi', e); }
+  }
+
+  root.HutbeState = { DEFAULT, load, save, clone };
+})(window);
+
+window.DISPLAY_HTML = "<!doctype html>\n<html lang=\"tr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>Hutbe Ekranı<\/title>\n<link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">\n<link href=\"https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Noto+Sans:wght@400;600&display=swap\" rel=\"stylesheet\">\n<style>\n  :root {\n    --teal: #1f5f63;\n    --teal-2: #2f7f83;\n    --gold: #c9a24a;\n    --paper: #fbfaf6;\n    --ink: #1d2a2b;\n    --scale: 1;\n  }\n  * { box-sizing: border-box; }\n  html, body { margin: 0; height: 100%; background: var(--paper); color: var(--ink); overflow: hidden; cursor: none; }\n  body { font-family: 'Noto Sans', 'Segoe UI', Arial, sans-serif; display: flex; flex-direction: column; }\n\n  header {\n    position: relative; display: flex; align-items: center; gap: 1.2vw;\n    height: 13vh; padding: 0 2.5vw;\n    background: linear-gradient(90deg, #fff 0 45%, #e3efee 100%);\n    border-bottom: .35vh solid var(--gold);\n  }\n  header .logo { height: 9.5vh; width: auto; max-width: 24vw; object-fit: contain; }\n  header .sep { width: 2px; height: 7vh; background: var(--gold); opacity: .7; }\n  header .title { font-size: 3.6vh; font-weight: 600; color: var(--teal); }\n  header .deco { position: absolute; right: 2vw; bottom: 0; height: 11vh; opacity: .9; }\n  .lang-tag { font-size: 1.6vh; color: #6b7b7c; margin-left: auto; margin-right: 14vw; letter-spacing: .05em; }\n\n  main { flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 1.5vh 4vw 2vh; overflow: hidden; }\n  .row {\n    display: grid; grid-template-columns: 6vh 1fr; align-items: center; gap: 1.5vw;\n    padding: 1.6vh 1.5vw; border-radius: 1.2vh; transition: opacity .5s, background .5s, transform .5s;\n    opacity: .32;\n  }\n  .row + .row { border-top: 1px solid rgba(201,162,74,.55); border-radius: 0; }\n  .row.current { opacity: 1; background: rgba(47,127,131,.06); border-radius: 1.2vh; }\n  .row.done { opacity: .45; }\n  .num {\n    width: 5.2vh; height: 5.2vh; display: grid; place-items: center; color: #fff; font-weight: 600; font-size: 2.4vh;\n    background: var(--teal); clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);\n  }\n  .row.current .num { background: var(--gold); }\n  .texts { text-align: center; }\n  .line { margin: .4vh 0; line-height: 1.35; font-size: calc(3vh * var(--s, 1) * var(--scale)); }\n  .line[dir=rtl] { font-family: 'Amiri', 'Traditional Arabic', 'Scheherazade New', serif; line-height: 1.6; font-weight: 700; }\n  .nonum { grid-template-columns: 1fr; }\n  .empty { text-align: center; color: #8a9697; font-size: 3vh; }\n<\/style>\n<\/head>\n<body>\n<header>\n  <img class=\"logo\" id=\"logo\" alt=\"Logo\">\n  <div class=\"sep\"><\/div>\n  <div class=\"title\" id=\"title\"><\/div>\n  <svg class=\"deco\" viewBox=\"0 0 200 100\" aria-hidden=\"true\">\n    <path d=\"M10 100 Q100 10 190 100 Z\" fill=\"#2f7f83\" opacity=\".18\"/>\n    <g fill=\"#1f5f63\" opacity=\".55\">\n      <rect x=\"40\" y=\"55\" width=\"6\" height=\"45\"/><path d=\"M43 40 l4 15 h-8z\"/>\n      <rect x=\"154\" y=\"55\" width=\"6\" height=\"45\"/><path d=\"M157 40 l4 15 h-8z\"/>\n      <path d=\"M70 100 V75 Q100 35 130 75 V100z\"/>\n      <circle cx=\"100\" cy=\"40\" r=\"3\"/>\n    <\/g>\n  <\/svg>\n<\/header>\n<main id=\"main\"><\/main>\n\n<script>// Ortak ayarlar ve kayıt\n(function (root) {\n  'use strict';\n  const KEY = 'hutbe-ekran.v1';\n\n  const DEFAULT = {\n    title: 'Cuma Hutbesi',\n    logo: null, // data URL; boşsa varsayılan hilal-cami simgesi\n    trackLang: 'tr',\n    perPage: 3,\n    showNumbers: true,\n    languages: [\n      { code: 'tr', name: 'Türkçe', dir: 'ltr', show: false, size: 1, speech: 'tr-TR' },\n      { code: 'ar', name: 'Arapça', dir: 'rtl', show: true, size: 1.3, speech: 'ar-SA' },\n      { code: 'mn', name: 'Moğolca', dir: 'ltr', show: true, size: 1, speech: 'mn-MN' },\n      { code: 'en', name: 'İngilizce', dir: 'ltr', show: true, size: 0.9, speech: 'en-US' },\n    ],\n    sources: { tr: '', ar: '', mn: '', en: '' },\n    rows: [],\n    current: 0,\n  };\n\n  function clone(x) { return JSON.parse(JSON.stringify(x)); }\n\n  function load() {\n    try {\n      const raw = localStorage.getItem(KEY);\n      if (raw) return Object.assign(clone(DEFAULT), JSON.parse(raw));\n    } catch (e) { /* kayıt okunamadı */ }\n    return clone(DEFAULT);\n  }\n\n  function save(state) {\n    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { console.warn('Kaydedilemedi', e); }\n  }\n\n  root.HutbeState = { DEFAULT, load, save, clone };\n})(window);\n<\/script>\n<script>\n(function () {\n  'use strict';\n  const DEFAULT_LOGO = 'data:image/svg+xml;utf8,' + encodeURIComponent(\n    '<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 100 100\"><path d=\"M62 8a42 42 0 1 0 30 70A36 36 0 1 1 62 8z\" fill=\"#c9a24a\"/>' +\n    '<g fill=\"#1f5f63\"><path d=\"M38 78V60q12-16 24 0v18z\"/><rect x=\"30\" y=\"52\" width=\"3\" height=\"26\"/><rect x=\"67\" y=\"52\" width=\"3\" height=\"26\"/><\/g><\/svg>');\n\n  let state = HutbeState.load();\n  const main = document.getElementById('main');\n\n  function esc(s) { return String(s).replace(/[&<>\"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;' }[c])); }\n\n  function render() {\n    document.getElementById('logo').src = state.logo || DEFAULT_LOGO;\n    document.getElementById('title').textContent = state.title || '';\n    const rows = state.rows || [];\n    const langs = state.languages.filter((l) => l.show);\n    if (!rows.length) { main.innerHTML = '<div class=\"empty\">Hutbe metni henüz yüklenmedi<\/div>'; return; }\n    const per = Math.max(1, state.perPage | 0);\n    const cur = Math.min(state.current | 0, rows.length - 1);\n    const start = Math.floor(cur / per) * per;\n    let html = '';\n    for (let i = start; i < Math.min(rows.length, start + per); i++) {\n      const r = rows[i];\n      const cls = i === cur ? 'current' : i < cur ? 'done' : '';\n      html += `<div class=\"row ${cls} ${state.showNumbers ? '' : 'nonum'}\">` +\n        (state.showNumbers ? `<div class=\"num\">${i + 1}<\/div>` : '') + '<div class=\"texts\">';\n      for (const l of langs) {\n        const t = r[l.code];\n        if (!t) continue;\n        html += `<div class=\"line\" dir=\"${l.dir}\" lang=\"${esc(l.code)}\" style=\"--s:${l.size || 1}\">${esc(t)}<\/div>`;\n      }\n      html += '<\/div><\/div>';\n    }\n    main.innerHTML = html;\n    fit();\n  }\n\n  // Yazı ekrana sığana kadar küçült\n  function fit() {\n    let s = 1.25;\n    document.documentElement.style.setProperty('--scale', s);\n    while (main.scrollHeight > main.clientHeight + 1 && s > 0.35) {\n      s -= 0.05;\n      document.documentElement.style.setProperty('--scale', s.toFixed(2));\n    }\n  }\n\n  window.addEventListener('message', (e) => {\n    const d = e.data || {};\n    if (d.type === 'state') { state = d.state; render(); }\n    else if (d.type === 'goto') { state.current = d.current; render(); }\n  });\n  window.addEventListener('storage', () => { state = HutbeState.load(); render(); });\n  window.addEventListener('resize', fit);\n  // Projeksiyon penceresinde de tuşlarla ileri/geri\n  window.addEventListener('keydown', (e) => {\n    const src = window.opener || (window.parent !== window ? window.parent : null);\n    if (!src) return;\n    if (['ArrowRight', 'PageDown', ' '].includes(e.key)) src.postMessage({ type: 'nav', step: 1 }, '*');\n    if (['ArrowLeft', 'PageUp'].includes(e.key)) src.postMessage({ type: 'nav', step: -1 }, '*');\n    if (e.key === 'f' || e.key === 'F') document.documentElement.requestFullscreen?.();\n  });\n  document.addEventListener('dblclick', () => document.documentElement.requestFullscreen?.());\n  if (document.fonts) document.fonts.ready.then(fit);\n  render();\n  const src = window.opener || (window.parent !== window ? window.parent : null);\n  if (src) src.postMessage({ type: 'hello' }, '*');\n})();\n<\/script>\n<\/body>\n<\/html>\n";</script>
+<script>// Cümlelere bölme ve diller arası otomatik eşleme (Gale-Church benzeri uzunluk tabanlı hizalama)
+(function (root) {
+  'use strict';
+
+  // Nokta ile bitse de cümle sonu sayılmayacak kısaltmalar
+  const ABBREV = new Set([
+    'hz', 'vb', 'vs', 'dr', 'prof', 'bkz', 'mr', 'mrs', 'ms', 'st', 'no', 'av', 'doç', 'yrd',
+    'e.g', 'i.e', 'etc', 'cf', 'vol', 'ibid', 'pbuh', 'saw', 'swt', 'as', 'ra', 'sas', 'cc',
+  ]);
+  const SENT_END = /[.!?…؟۔]/;
+  const CLOSERS = /["'”»’)\]﴿﴾]/;
+
+  function isAbbrev(prevWord) {
+    const w = prevWord.replace(/^[("'“«\[]+/, '').toLocaleLowerCase('tr');
+    const core = w.replace(/\.+$/, '');
+    if (ABBREV.has(core)) return true;
+    // s.a.s. / r.a. / a.s. / c.c. gibi tek harfli noktalı kısaltmalar
+    if (/^(\p{L}\.)+\p{L}?\.?\)?$/u.test(w)) return true;
+    // tek harf (ör. "M." gibi baş harfler)
+    if (/^\p{L}$/u.test(core)) return true;
+    return false;
+  }
+
+  function splitSentences(text) {
+    if (!text) return [];
+    const paras = text.replace(/\r/g, '').split(/\n+/).map((t) => t.trim()).filter(Boolean);
+    const out = [];
+    for (const p of paras) {
+      let start = 0;
+      let i = 0;
+      while (i < p.length) {
+        if (SENT_END.test(p[i])) {
+          let j = i + 1;
+          while (j < p.length && (SENT_END.test(p[j]) || CLOSERS.test(p[j]))) j++;
+          if (j >= p.length) break;
+          if (/\s/.test(p[j])) {
+            let k = j;
+            while (k < p.length && /\s/.test(p[k])) k++;
+            const before = p.slice(start, j).trim().split(/\s+/).pop() || '';
+            const nextCh = p[k] || '';
+            const nextIsLower = /\p{Ll}/u.test(nextCh);
+            if (!(p[i] === '.' && isAbbrev(before)) && !nextIsLower) {
+              out.push(p.slice(start, j).trim());
+              start = k;
+            }
+            i = k;
+            continue;
+          }
+          i = j;
+          continue;
+        }
+        i++;
+      }
+      const rest = p.slice(start).trim();
+      if (rest) out.push(rest);
+    }
+    return out;
+  }
+
+  // Diyanet hutbe dosyalarındaki tarih satırını ve dipnot numaralarını temizler
+  function cleanText(text) {
+    if (!text) return '';
+    return text.replace(/^﻿/, '')
+      .split(/\r?\n/)
+      .filter((l) => !/^\s*\S*\s*:?\s*\d{1,2}\.\d{1,2}\.\d{4}\s*$/u.test(l.replace(/[‎‏‪-‮]/g, '')))
+      .join('\n')
+      .replace(/(?<=[\p{L}\p{M}][.!?…]?[”"’»)]?)\d{1,2}(?=\s|$|[.,;:”"])/gu, '') // "ibadettir.1" -> "ibadettir."
+      .replace(/[ \t]+/g, ' ')
+      .trim();
+  }
+
+  function charLen(s) {
+    return s.replace(/[\sً-ٰٟۖ-ۭ]/g, '').length; // boşluk ve harekeler hariç
+  }
+
+  // Bead tipleri: [Türkçe cümle sayısı, hedef cümle sayısı, ön-olasılık]
+  const BEADS = [
+    [1, 1, 0.86], [2, 1, 0.05], [1, 2, 0.05], [2, 2, 0.01],
+    [3, 1, 0.006], [1, 3, 0.006], [1, 0, 0.003], [0, 1, 0.003],
+  ];
+
+  // Dillerde aynı anlama gelen "çapa" kelimeler: hizalamaya ipucu verir
+  const ANCHORS = [
+    /allah|الله|аллах/i,
+    /peygamber|resul|rasul|prophet|messenger|رسول|النبي|نبي|бошиглогч|элч|пайгамбар/i,
+    /kur.?an|qur.?an|quran|القرآن|коран|куран/i,
+    /cuma|friday|الجمعة|баасан/i,
+    /ramazan|ramadan|رمضان|рамадан/i,
+  ];
+  function anchorsOf(s) {
+    const set = new Set();
+    ANCHORS.forEach((re, i) => { if (re.test(s)) set.add('a' + i); });
+    const nums = s.match(/\d+/g) || [];
+    // Arapça-Hint rakamlarını da çevir
+    const ar = (s.match(/[٠-٩]+/g) || []).map((x) => String(Number(x.replace(/[٠-٩]/g, (d) => d.charCodeAt(0) - 0x660))));
+    for (const n of nums.concat(ar)) set.add('n' + Number(n));
+    return set;
+  }
+  function anchorCost(sa, ta) {
+    if (!sa.size && !ta.size) return 0;
+    let common = 0;
+    for (const x of sa) if (ta.has(x)) common++;
+    const diff = sa.size + ta.size - 2 * common;
+    return diff * 0.8 - common * 1.2;
+  }
+
+  // src: kaynak (takip dili) cümleleri, tgt: hedef dil cümleleri.
+  // Dönüş: beads listesi [{s0, sn, t0, tn}]
+  function alignPair(src, tgt) {
+    const ls = src.map(charLen);
+    const lt = tgt.map(charLen);
+    const totS = ls.reduce((a, b) => a + b, 0) || 1;
+    const totT = lt.reduce((a, b) => a + b, 0) || 1;
+    const r = totT / totS;
+    const sAnch = src.map(anchorsOf);
+    const tAnch = tgt.map(anchorsOf);
+    const S2 = 6.8;
+    const n = src.length, m = tgt.length;
+    const INF = 1e18;
+    const cost = Array.from({ length: n + 1 }, () => new Float64Array(m + 1).fill(INF));
+    const back = Array.from({ length: n + 1 }, () => new Int8Array(m + 1).fill(-1));
+    cost[0][0] = 0;
+    const sumS = (i, a) => { let s = 0; for (let k = i - a; k < i; k++) s += ls[k]; return s; };
+    const sumT = (j, b) => { let s = 0; for (let k = j - b; k < j; k++) s += lt[k]; return s; };
+    for (let i = 0; i <= n; i++) {
+      for (let j = 0; j <= m; j++) {
+        if (i === 0 && j === 0) continue;
+        let best = INF, bi = -1;
+        for (let b = 0; b < BEADS.length; b++) {
+          const [a, c, prior] = BEADS[b];
+          if (i < a || j < c) continue;
+          const prev = cost[i - a][j - c];
+          if (prev >= INF) continue;
+          const x = sumS(i, a) * r;
+          const y = sumT(j, c);
+          const mean = (x + y) / 2 || 1;
+          const delta = (y - x) / Math.sqrt(mean * S2);
+          const sa = new Set(), ta = new Set();
+          for (let k = i - a; k < i; k++) sAnch[k].forEach((x) => sa.add(x));
+          for (let k = j - c; k < j; k++) tAnch[k].forEach((x) => ta.add(x));
+          const cst = prev + (delta * delta) / 2 - Math.log(prior) + anchorCost(sa, ta);
+          if (cst < best) { best = cst; bi = b; }
+        }
+        cost[i][j] = best;
+        back[i][j] = bi;
+      }
+    }
+    const beads = [];
+    let i = n, j = m;
+    while (i > 0 || j > 0) {
+      const b = back[i][j];
+      if (b < 0) break;
+      const [a, c] = BEADS[b];
+      beads.push({ s0: i - a, sn: a, t0: j - c, tn: c });
+      i -= a; j -= c;
+    }
+    return beads.reverse();
+  }
+
+  // texts: {kod: metin}, trackCode: takip dili. Dönüş: [{kod: metin}] satırlar
+  function autoAlign(rawTexts, trackCode) {
+    const texts = {};
+    for (const k of Object.keys(rawTexts)) texts[k] = cleanText(rawTexts[k]);
+    const src = splitSentences(texts[trackCode] || '');
+    if (!src.length) return [];
+    const n = src.length;
+    // noBreak[i] = true ise i-1 ile i arasında satır sonu olamaz
+    const noBreak = new Array(n).fill(false);
+    const perLang = {};
+    for (const code of Object.keys(texts)) {
+      if (code === trackCode) continue;
+      const tgt = splitSentences(texts[code] || '');
+      if (!tgt.length) continue;
+      const beads = alignPair(src, tgt);
+      // 0-1 bead'leri (karşılığı olmayan hedef cümle) komşu bead'e ekle
+      const assign = new Array(n).fill(null).map(() => []); // kaynak cümle -> hedef cümleler
+      let lastSrc = 0;
+      const pendingFront = [];
+      for (const b of beads) {
+        if (b.sn === 0) {
+          for (let k = 0; k < b.tn; k++) {
+            if (b.s0 === 0 && lastSrc === 0 && !assign[0].length) pendingFront.push(tgt[b.t0 + k]);
+            else assign[Math.max(0, lastSrc)].push(tgt[b.t0 + k]);
+          }
+          continue;
+        }
+        for (let k = 1; k < b.sn; k++) noBreak[b.s0 + k] = true;
+        for (let k = 0; k < b.tn; k++) assign[b.s0].push(tgt[b.t0 + k]);
+        lastSrc = b.s0;
+      }
+      if (pendingFront.length) assign[0].unshift(...pendingFront);
+      perLang[code] = assign;
+    }
+    const rows = [];
+    let cur = null;
+    for (let i = 0; i < n; i++) {
+      if (!cur || !noBreak[i]) {
+        cur = { [trackCode]: [] };
+        for (const code of Object.keys(perLang)) cur[code] = [];
+        rows.push(cur);
+      }
+      cur[trackCode].push(src[i]);
+      for (const code of Object.keys(perLang)) cur[code].push(...perLang[code][i]);
+    }
+    return rows.map((r) => {
+      const o = {};
+      for (const k of Object.keys(r)) o[k] = r[k].join(' ');
+      return o;
+    });
+  }
+
+  const api = { splitSentences, alignPair, autoAlign, cleanText };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  else root.HutbeAlign = api;
+})(typeof window !== 'undefined' ? window : globalThis);
+</script>
+<script>// İmamın sesinden gelen yazıyı hutbe cümleleriyle karşılaştırıp hangi cümlede olunduğunu takip eder.
+(function (root) {
+  'use strict';
+
+  const FOLD = { 'ç': 'c', 'ş': 's', 'ğ': 'g', 'ı': 'i', 'ö': 'o', 'ü': 'u', 'â': 'a', 'î': 'i', 'û': 'u' };
+
+  function normalizeWords(text) {
+    return (text || '')
+      .toLocaleLowerCase('tr')
+      .replace(/[çşğıöüâîû]/g, (c) => FOLD[c])
+      .normalize('NFD').replace(/\p{M}/gu, '')
+      .replace(/['’`]\p{L}*/gu, '') // "Allah'a" -> "allah"
+      .replace(/(?:\p{L}\.){2,}/gu, ' ') // (s.a.s.), r.a. gibi kısaltmalar
+      .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+      .split(/\s+/)
+      .filter((w) => w.length > 1 || /\d/.test(w));
+  }
+
+  function lev(a, b) {
+    if (a === b) return 0;
+    const m = a.length, n = b.length;
+    if (!m) return n; if (!n) return m;
+    let prev = new Array(n + 1);
+    for (let j = 0; j <= n; j++) prev[j] = j;
+    for (let i = 1; i <= m; i++) {
+      const cur = [i];
+      for (let j = 1; j <= n; j++) {
+        cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      }
+      prev = cur;
+    }
+    return prev[n];
+  }
+
+  function similar(a, b) {
+    if (a === b) return true;
+    const L = Math.max(a.length, b.length);
+    if (L <= 2) return false;
+    // Ekler farklı duyulabilir: "kardeşlerimiz" / "kardeşlerim"
+    const p = Math.min(a.length, b.length);
+    if (p >= 4 && (a.startsWith(b) || b.startsWith(a))) return true;
+    return 1 - lev(a, b) / L >= 0.7;
+  }
+
+  class Tracker {
+    constructor(opts) {
+      this.onChange = opts.onChange || (() => {});
+      this.onProgress = opts.onProgress || (() => {});
+      this.sentences = [];
+      this.current = 0;
+      this.final = [];
+      this.interim = [];
+      this.startIdx = 0;
+    }
+
+    setSentences(texts, current = 0) {
+      this.sentences = texts.map(normalizeWords);
+      this.current = current;
+      this.startIdx = this.final.length + this.interim.length;
+    }
+
+    // Elle geçişte: dinlenen kısmı sıfırla
+    goto(index) {
+      this.current = Math.max(0, Math.min(index, this.sentences.length - 1));
+      this.startIdx = this.final.length + this.interim.length;
+      this.onProgress(this.current, 0);
+    }
+
+    addFinal(text) { this.final.push(...normalizeWords(text)); this.interim = []; this._evaluate(); }
+    setInterim(text) { this.interim = normalizeWords(text); this._evaluate(); }
+    // Tanıma oturumu yeniden başlarken
+    resetInterim() { this.interim = []; }
+
+    _match(seg, words) {
+      let p = 0, matched = 0, lastMatchAt = -1;
+      for (let s = 0; s < seg.length && p < words.length; s++) {
+        const w = seg[s];
+        for (let j = p; j < Math.min(words.length, p + 5); j++) {
+          if (similar(w, words[j])) { p = j + 1; matched++; lastMatchAt = s; break; }
+        }
+      }
+      return { p, matched, lastMatchAt };
+    }
+
+    _evaluate() {
+      if (!this.sentences.length) return;
+      const stream = this.final.concat(this.interim);
+      if (this.startIdx > stream.length) this.startIdx = stream.length;
+      let guard = 0;
+      while (guard++ < 5) {
+        const seg = stream.slice(this.startIdx);
+        const words = this.sentences[this.current] || [];
+        if (!words.length) { if (!this._advance(1, this.startIdx)) return; continue; }
+        const { p, matched, lastMatchAt } = this._match(seg, words);
+        const progress = p / words.length;
+        this.onProgress(this.current, progress, p);
+
+        // 1) Cümle sonuna gelindi
+        const tail = words.length <= 4 ? 0 : 1;
+        if (p >= words.length - tail && matched / words.length >= 0.5) {
+          if (this._advance(1, this.startIdx + lastMatchAt + 1)) continue;
+          return;
+        }
+        // 2) İmam bir sonraki cümlelere geçmiş (son duyulan kelimeler sonraki cümlenin başı)
+        const jumped = this._lookahead(seg, matched / words.length);
+        if (jumped) continue;
+        return;
+      }
+    }
+
+    _lookahead(seg, curCoverage) {
+      for (let k = 1; k <= 3; k++) {
+        const nxt = this.sentences[this.current + k];
+        if (!nxt || !nxt.length) continue;
+        const need = Math.min(k === 1 ? 3 : 4, nxt.length);
+        if (seg.length < need) continue;
+        // Son kelimelerin içinde sonraki cümlenin ilk 'need' kelimesini sırasıyla ara
+        const window = seg.slice(-need - 2);
+        for (let s = 0; s + need <= window.length; s++) {
+          let ok = true;
+          for (let q = 0; q < need; q++) if (!similar(window[s + q], nxt[q])) { ok = false; break; }
+          // Kısa hitap cümleleri ("Aziz Müminler!") tamamı duyulunca da geçerli sayılır
+          if (ok && (k > 1 || curCoverage >= 0.3 || need >= 3 || need === nxt.length)) {
+            const absStart = this.startIdx + (seg.length - window.length) + s;
+            return this._advance(k, absStart);
+          }
+        }
+      }
+      return false;
+    }
+
+    _advance(step, newStart) {
+      const next = this.current + step;
+      if (next >= this.sentences.length) return false;
+      this.current = next;
+      this.startIdx = newStart;
+      this.onChange(this.current);
+      return true;
+    }
+  }
+
+  const api = { Tracker, normalizeWords, similar };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  else root.HutbeTracker = api;
+})(typeof window !== 'undefined' ? window : globalThis);
+</script>
+<script>// Otomatik üretildi: node tools/build-hutbeler.js
+window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","title":"İbadet","data":{"title":"Cuma Hutbesi – İbadet (06.11.2026)","trackLang":"tr","sources":{"tr":"İBADET\nMuhterem Müslümanlar!\nCenâb-ı Hakk’a olan bağlılığımızın en somut göstergesi ibadetlerimizdir. İbadetler; yaratılış gayemizdir, imanımızın hayata yansımasıdır. Rabbimizin bize sunduğu nimetlere karşı şükrümüzün gereği, O’nun sonsuz rahmetine ulaşma arzumuzdur. İhlasla eda ettiğimiz her ibadet; dilimizin zikirle buluşmasına, hayatımızın mutlulukla dolmasına vesiledir.\nAziz Müminler!\nRabbimizin farz kıldığı, şekli ve vakti belli ibadetler, dinimizin direği ve kulluğumuzun özüdür. Namaz bizleri; hayâsızlıktan ve kötülükten uzak tutar, günahlardan temizler, gönlümüzü huzura erdirir. Oruç; takvayı, sabrı, muhtacın derdiyle dertlenmeyi bizlere öğretir. Zekât, malımızı ve servetimizi maddi ve manevi kirlerden arındırırken bizleri de cimrilik hastalığından korur. Hac ise kötü sözlerden, kavgadan ve öfkeden uzak kalmayı, bütün insanların Allah katında bir tarağın dişleri gibi eşit olduğunu bizlere hatırlatır. \nKıymetli Müslümanlar!\nAllah’ın rızasını gözeterek yaptığımız her iyilik ve her hayırlı iş aynı zamanda bir ibadettir. Nitekim kendimizin ve ailemizin rızkını helal yollardan kazanmak, alışverişte dürüst olmak, çalışıp üretmek ibadettir. Ailemiz, akrabamız ve komşularımızla bağımızı güçlü tutmak, onlarla ilgilenmek, onların sevinçlerini ve kederlerini paylaşmak ibadettir. Engelli bir kardeşimizin hayatını kolaylaştırmak, ihtiyaç sahibi bir öğrencinin eğitimine destek olmak, geçim sıkıntısı çeken bir komşumuzun yardımına koşmak ibadettir. Rahmet Elçisi (s.a.s)’in, “Kul, kardeşinin yardımında olduğu sürece, Allah da o kulun yardımcısıdır” muştusuna nail olabilmek ne büyük saadettir.\nDeğerli Müminler!\nYeri geldiğinde yüzümüzde beliren bir tebessüm, yeri geldiğinde insanlara eziyet veren engelleri kaldırmak, yeri geldiğinde ise mazlum ve mağdurlara el uzatmak bir sadakadır ve her sadaka bir ibadettir. Kimi zaman bir hastaya kan vererek can olmak, kimi zaman da çaresizce bekleyen bir kardeşimiz için dini ve tıbbi hassasiyetleri dikkate alarak organ bağışında bulunmak bir iyiliktir ve her iyilik bir ibadettir. Ayet-i kerime gayet açıktır: “…Kim, bir insanın hayatını kurtarırsa bütün insanların hayatını kurtarmış gibi olur…” \nAziz Kardeşlerim!\nÖmrümüz kısa, dünya geçici, ahiret hayatı ise haktır, gerçektir ve ebedidir. Gün gelir; nefesimiz biter, adımlarımız durur, dünyaya ait olan ne varsa geride bırakır gideriz. Evet, Değerli Kardeşlerim! Asıl mesele, dünyada ne kadar kaldığımız değil, Allah’a olan kulluğumuz ve O’nun rızası için yaptığımız iyiliklerimizdir. Asıl mesele, Sevgili Peygamberimiz (s.a.s)’in, “…Allah katında amellerin en sevimlisi, az da olsa devamlı olanıdır” tavsiyesine uyarak ömrümüzü ibadete çevirebilmektir.\nHutbemizi, Nahl sûresi doksan yedinci ayet-i kerimenin mealiyle bitiriyoruz: “Erkek ya da kadın, kim mümin olarak salih amel işlerse, elbette ona hoş bir hayat yaşatacağız ve onların mükâfatlarını yaptıklarına karşılık olarak en güzeliyle vereceğiz.”","ar":"الْعِبَادَةُ\nأَيُّهَا الْمُسْلِمُونَ الْأَفَاضِلُ!\nإِنَّ عِبَادَاتِنَا هِيَ أَبْرَزُ مَظَاهِرِ ارْتِبَاطِنَا وَتَعَلُّقِنَا بِاللَّهِ سُبْحَانَهُ وَتَعَالَى. فَالْعِبَادَاتُ هِيَ الْغَايَةُ مِنْ وُجُودِنَا عَلَى الأَرْضِ، وَهِيَ إِنْعِكَاسٌ لِإِيمَانِنَا فِي حَيَاتِنَا. وَهِيَ مُقْتَضَى شُكْرِنَا لِرَبِّنَا عَلَى مَا أَنْعَمَ بِهِ عَلَيْنَا مِنْ نِعَمٍ، وَتَعْبِيرٌ عَنْ رَغْبَتِنَا فِي نَيْلِ رَحْمَتِهِ اللَّامُتَنَاهِيَةِ. وَكُلُّ عِبَادَةٍ نُؤَدِّيهَا بِإِخْلَاصٍ تَكُونُ سَبَبًا فِي أَنْ تَلْهَجَ أَلْسِنَتُنَا بِذِكْرِ اللَّهِ، وَأَنْ تَمْتَلِئَ حَيَاتُنَا بِالسَّعَادَةِ.\nأَيُّهَا الْمُسْلِمُونَ الْأَعِزَّاءُ!\nإِنَّ الْعِبَادَاتِ الَّتِي فَرَضَهَا عَلَيْنَا رَبُّنَا سُبْحَانَهُ وَتَعَالَى، وَحَدَّدَ كَيْفِيَّةَ أَدَائِهَا وَأَوْقَاتَهَا، هِيَ عِمَادُ دِينِنَا وَجَوْهَرُ عُبُودِيَّتِنَا لِلَّهِ تَعَالَى. فَالصَّلَاةُ تَنْهَانَا عَنِ الْفَحْشَاءِ وَالْمُنْكَرِ، وَتُطَهِّرُنَا مِنَ الذُّنُوبِ، وَتَبْعَثُ الطُّمَأْنِينَةَ فِي قُلُوبِنَا. وَالصِّيَامُ يُعَلِّمُنَا التَّقْوَى وَالصَّبْرَ وَمُشَارَكَةَ الْمُحْتَاجِينَ في هُمُومِهِمْ. وَالزَّكَاةُ تُطَهِّرُ أَمْوَالَنَا وَثَرَوَاتِنَا مِنَ الْأَدْرَانِ الْمَادِّيَّةِ وَالْمَعْنَوِيَّةِ، وَتُجَنِّبُنَا عَنْ مَرَضِ الْبُخْلِ. أَمَّا الْحَجُّ فَيُذَكِّرُنَا بِضَرُورَةِ الِابْتِعَادِ عَنِ الْكَلَامِ السَّيِّئِ وَالْخِصَامِ وَالْغَضَبِ، وَبِأَنَّ النَّاسَ جَمِيعًا مُتَسَاوُونَ عِنْدَ اللَّهِ كَأَسْنَانِ الْمُشْطِ. \nأَيُّهَا الْمُسْلِمُونَ الْكِرَامُ!\nإِنَّ كُلَّ خَيْرٍ وَعَمَلٍ صَالِحٍ نَفْعَلُهُ ابْتِغَاءَ مَرْضَاةِ اللَّهِ عِبَادَةٌ فِي الْوَقْتِ نَفْسِهِ. فَالْعَمَلُ عَلَى كَسْبِ رِزْقِنَا وَرِزْقِ أُسْرَتِنَا مِنْ طُرُقٍ حَلَالٍ، وَالصِّدْقُ فِي الْبَيْعِ وَالشِّرَاءِ، وَالْعَمَلُ وَالْإِنْتَاجُ، كُلُّ ذَلِكَ عِبَادَةٌ. وَتَوْثِيقُ صِلَتِنَا بِأُسْرَتِنَا وَأَقَارِبِنَا وَجِيرَانِنَا، وَالِاهْتِمَامُ بِهِمْ، وَمُشَارَكَتُهُمْ في أَفْرَاحِهِمْ وَأَحْزَانِهِمْ، عِبَادَةٌ. وَتَيْسِيرُ حَيَاةِ أَحَدِ إِخْوَانِنَا مِنْ ذَوِي المُعَاقِين، وَدَعْمُ طَالِبٍ مُحْتَاجٍ فِي تَعْلِيمِهِ، وَالْمُسَارَعَةُ إِلَى اعانة جَارٍ يُعَانِي ضِيقَ الْعَيْشِ، كُلُّ ذَلِكَ عِبَادَةٌ. وَقَدْ بَشَّرَنَا رَسُولُ الرَّحْمَةِ ﷺ بِقَوْلِهِ: \"وَاللَّهُ فِي عَوْنِ الْعَبْدِ مَا كَانَ الْعَبْدُ فِي عَوْنِ أَخِيهِ.\" فَمَا أَعْظَمَ السَّعَادَةَ فِي أَنْ نَنَالَ هَذِهِ الْبُشْرَى.\nأَيُّهَا الْمُؤْمِنُونَ الْأَفَاضِلُ!\nقَدْ تَكُونُ الِابْتِسَامَةُ الَّتِي تَرْتَسِمُ عَلَى وُجُوهِنَا صَدَقَةً، وَقَدْ تَكُونُ إِمَاطَةُ مَا يُؤْذِي النَّاسَ عَنْ طَرِيقِهِمْ صَدَقَةً، وَقَدْ يَكُونُ مَدُّ يَدِ الْعَوْنِ إِلَى الْمَظْلُومِينَ وَالْمُتَضَرِّرِينَ صَدَقَةً، وَكُلُّ صَدَقَةٍ عِبَادَةٌ. وَقَدْ يَكُونُ التَّبَرُّعُ بِالدَّمِ لِإِنْقَاذِ حَيَاةِ مَرِيضٍ، أَوِ التَّبَرُّعُ بِالْأَعْضَاءِ لِأَخٍ لَنَا يَنْتَظِرُ الْعَوْنَ وَلَا حِيلَةَ لَهُ دون ذلك، مَعَ مُرَاعَاةِ الِاعْتِبَارَاتِ الدِّينِيَّةِ وَالطِّبِّيَّةِ، عَمَلًا مِنْ أَعْمَالِ الْخَيْرِ، وَكُلُّ عَمَلٍ مِنْ أَعْمَالِ الْخَيْرِ عِبَادَةٌ. وَالْآيَةُ الْكَرِيمَةُ وَاضِحَةٌ جَلِيَّةٌ فِي هَذَا الشَّأْنِ، حَيْثُ قَالَ اللَّهُ تَعَالَى: \"وَمَنْ أَحْيَاهَا فَكَأَنَّمَا أَحْيَا النَّاسَ جَمِيعًا.\"\nأَيُّهَا الْمُؤْمِنُونَ الْأَعِزَّاءُ!\nإِنَّ أَعْمَارَنَا قَصِيرَةٌ، وَالدُّنْيَا فَانِيَةٌ، أَمَّا حَيَاةُ الْآخِرَةِ فَهِيَ حَقٌّ لَا رَيْبَ فِيهِ، وَأَبَدِيَّةٌ. وَسَيَأْتِي يَوْمٌ تَنْقَطِعُ فِيهِ أَنْفَاسُنَا، وَتَتَوَقَّفُ فِيهِ خُطَانَا، وَسَنَرْحَلُ عَنْ هَذِهِ الدُّنْيَا تَارِكِينَ وَرَاءَنَا كُلَّ مَا فِيهَا. نَعَمْ، أَيُّهَا الْإِخْوَةُ الْكِرَامُ! إِنَّ الْعِبْرَةَ لَيْسَتْ بِطُولِ مُكْثِنَا فِي الدُّنْيَا، وَإِنَّمَا بِعُبُودِيَّتِنَا لِلَّهِ تَعَالَى، وَبِمَا نَقُومُ بِهِ مِنْ أَعْمَالِ الْخَيْرِ ابْتِغَاءَ مَرْضَاتِهِ. وَالْأَهَمُّ مِنْ ذَلِكَ أَنْ نَجْعَلَ حَيَاتَنَا كُلَّهَا عِبَادَةً، عَمَلًا بِوَصِيَّةِ نَبِيِّنَا الْحَبِيبِ ﷺ الَّذِي قَالَ: \"وَإِنَّ أَحَبَّ الْعَمَلِ إِلَى اللَّهِ أَدْوَمُهُ وَإِنْ قَلَّ\".4\nوَنَخْتَتِمُ خُطْبَتَنَا بِقَوْلِ اللَّهِ تَعَالَى فِي الْآيَةِ السَّابِعَةِ وَالتِّسْعِينَ مِنْ سُورَةِ النَّحْلِ: \"مَنْ عَمِلَ صَالِحًا مِنْ ذَكَرٍ أَوْ أُنْثَى وَهُوَ مُؤْمِنٌ فَلَنُحْيِيَنَّهُ حَيَاةً طَيِّبَةً وَلَنَجْزِيَنَّهُمْ أَجْرَهُمْ بِأَحْسَنِ مَا كَانُوا يَعْمَلُونَ\".5","en":"WORSHIP\nEsteemed Muslims!\nOur acts of worship are the most tangible manifestations of our devotion to Allah the Almighty. Worship is the very purpose of our creation and the reflection of our faith in our lives. It is an expression of our gratitude for the blessings bestowed upon us by our Lord and our longing to attain His infinite mercy. Every act of worship we perform with sincerity brings our tongues to the remembrance of Allah and fills our lives with happiness.\nDear Believers!\nThe acts of worship prescribed as obligatory by our Lord, with their prescribed forms and times, are the pillars of our religion and the essence of our servitude to Him. Prayer keeps us away from indecency and evil, purifies us of our sins, and brings peace to our hearts. Fasting teaches us taqwa, patience, and compassion for those in need. Zakat purifies our wealth and possessions of material and spiritual impurities while protecting us from the vice of miserliness. Hajj reminds us to refrain from foul language, quarrels, and anger, and that all people are equal in the sight of Allah, like the teeth of a comb. \nEsteemed Muslims!\nEvery good deed and righteous act we perform seeking the pleasure of Allah is also an act of worship. Indeed, earning a halal livelihood for ourselves and our families, being honest in our business dealings, and working and producing are all acts of worship. Maintaining strong ties with our families, relatives, and neighbors, caring for them, and sharing in their joys and sorrows are acts of worship. Making life easier for a brother or sister with a disability, supporting the education of a student in need, and extending a helping hand to a neighbor facing financial hardship are acts of worship. What a great blessing it is to receive the glad tidings of the Messenger of Mercy (saw): “Allah continues to help His servant as long as the servant helps his brother.”\nHonorable Believers!\nA smile on our faces, removing obstacles that cause harm to others, or extending a helping hand to the oppressed and those who have suffered injustice are all forms of sadaqah, and every act of sadaqah is an act of worship. Whether it is saving a life by donating blood to a patient or donating an organ to a brother or sister desperately awaiting help, while taking religious and medical considerations into account, these are acts of goodness, and every good deed is an act of worship. The following verse of the Qur’an clearly states: “…Whoever saves a life, it will be as if they saved all of humanity…” \nDear Brothers and Sisters!\nOur lives are short, this world is temporary, and the Hereafter is certain, real, and eternal. A day will come when we take our last breath, our footsteps come to a halt, and we depart this world, leaving behind everything that belongs to it. Indeed, Dear Brothers and Sisters! What truly matters is not how long we remain in this world, but our devotion to Allah and the good deeds we perform seeking His pleasure. What truly matters is turning our entire lives into acts of worship by following the advice of our beloved Prophet (saw): “…The deeds most beloved to Allah are those performed consistently, even if they are few.”\nWe conclude this week’s khutbah with the meaning of verse 97 of Surah An-Nahl: “Whoever does good, whether male or female, and is a believer, We will surely bless them with a good life, and We will certainly reward them according to the best of their deeds.”","mn":"ИБАДАТ\nЭрхэм хүндэт мусульманчууд аа!\nИх Эзэн Аллахад үнэнч байдгийн маань хамгийн тод илрэл бол бидний ибадат мөргөл юм.\nИбадат бол бидний бүтээгдсэн зорилго, бидний итгэл амьдралд тусгагдсан хэлбэр юм.\nЭнэ нь Эзэний маань бидэнд хайрласан ач ивээлд талархах бидний үүрэг бөгөөд Түүний хязгааргүй нигүүлсэлд хүрэх бидний хүсэл юм.\nЧин сэтгэлээр үйлдсэн ибадат бүр бидний хэлийг Аллахыг дурсахад хүргэж, амьдралыг маань аз жаргалаар дүүргэх шалтгаан болдог.\nХүндэт итгэгчид ээ!\nЭзэний маань фарз болгосон, хэлбэр болон цаг хугацаа нь тогтоогдсон ибадатууд бол бидний шашны тулгуур багана, Түүнд зүтгэх бидний боолчлолын мөн чанар юм.\nНамаз биднийг ичгүүргүй, муу үйлсээс хол байлгаж, нүглээс ариусгаж, зүрх сэтгэлийг маань амар тайван болгодог.\nМацаг барих нь бидэнд такваа, тэвчээр, гачигдалтай хүмүүсийн зовлонг хуваалцахыг сургадаг.\nЗакат бидний эд хөрөнгийг материаллаг болон оюун санааны бузраас ариусгахын зэрэгцээ биднийг харамч занаас хамгаалдаг.\nХаж мөргөл харин муу үг, хэрүүл маргаан, уур хилэнгээс хол байх, бүх хүн Аллахын өмнө самны шүд адил тэгш гэдгийг бидэнд сануулдаг.\nЭрхэм мусульманчууд аа!\nАллахын таалалд нийцүүлэн хийсэн сайн үйлс, буянтай ажил бүр мөн ибадат юм.\nТухайлбал, өөрийн болон гэр бүлийнхээ хүнсийг халал замаар олох, худалдаа наймаандаа шударга байх, хөдөлмөрлөж бүтээх нь ибадат юм.\nГэр бүл, төрөл садан, хөршүүдтэйгээ холбоогоо бат бөх байлгах, тэдэнд анхаарал тавих, баяр баясгалан, уй гашууг нь хуваалцах нь ибадат юм.\nХөгжлийн бэрхшээлтэй ах дүүгийнхээ амьдралыг хөнгөвчлөх, тусламж хэрэгтэй сурагчийн боловсролд дэмжлэг үзүүлэх, амьжиргааны хүндрэлтэй хөршдөө туслахаар яарах нь ибадат юм.\nНигүүлслийн Элч (с.а.с)-ийн \"Боол ах дүүдээ тусалж байх хугацаанд Аллах ч мөн тэр боолд туслагч байна\" гэсэн сайн мэдээнд хүртэх нь ямар их аз жаргал вэ!\nХүндэт итгэгчид ээ!\nХэрэгтэй үед нүүрэндээ тодруулсан инээмсэглэл, хүмүүст саад болох зүйлийг замаас зайлуулах, хэлмэгдэгсэд болон хохирогчдод тусламжийн гар сунгах нь садака бөгөөд садака бүр ибадат юм.\nЗаримдаа өвчтөнд цусаа өгч амийг нь аврах, заримдаа найдвар тасран хүлээж буй ах дүүдээ шашны болон анагаах ухааны шаардлагыг харгалзан эрхтэнээ хандивлах нь сайн үйл бөгөөд сайн үйл бүр ибадат юм.\nАриун айат үүнийг тодорхой хэлдэг: \"...Хэн нэгэн хүний амийг аварвал бүх хүн төрөлхтний амийг аварсантай адил болно...\"\nЭрхэм ах дүү нар аа!\nБидний нас богино, энэ дэлхий түр зуурынх, харин хойд насны амьдрал бол үнэн, бодит бөгөөд мөнхийн юм.\nНэг өдөр амьсгал маань тасарч, алхам маань зогсож, энэ дэлхийд хамаарах бүхнийг ардаа орхин явах болно.\nТийм ээ, эрхэм ах дүү нар аа!\nГол асуудал бол энэ дэлхийд хэр удаан амьдарсан нь бус, харин Аллахад зүтгэсэн бидний боолчлол болон Түүний таалалын төлөө хийсэн сайн үйлс маань юм.\nГол асуудал бол хайрт Бошиглогч (с.а.с)-ийн \"...Аллахын өмнө хамгийн хайртай үйлс бол бага ч гэсэн тогтмол хийгддэг нь юм\" гэсэн зөвлөгөөг дагаж, амьдралаа ибадат болгон хувиргах явдал юм.\nХутбаагаа бид Нахл судрын ерэн долдугаар айатын утгаар төгсгөж байна: \"Эрэгтэй ч бай, эмэгтэй ч бай, итгэгч байхдаа сайн үйл хийсэн хэнд ч Бид сайхан амьдрал заяах бөгөөд тэдний шагналыг хийсэн үйлсийнх нь хамгийн сайнаар нь өгөх болно.\""},"rows":[{"tr":"İBADET","ar":"الْعِبَادَةُ","en":"WORSHIP","mn":"ИБАДАТ"},{"tr":"Muhterem Müslümanlar!","ar":"أَيُّهَا الْمُسْلِمُونَ الْأَفَاضِلُ!","en":"Esteemed Muslims!","mn":"Эрхэм хүндэт мусульманчууд аа!"},{"tr":"Cenâb-ı Hakk’a olan bağlılığımızın en somut göstergesi ibadetlerimizdir.","ar":"إِنَّ عِبَادَاتِنَا هِيَ أَبْرَزُ مَظَاهِرِ ارْتِبَاطِنَا وَتَعَلُّقِنَا بِاللَّهِ سُبْحَانَهُ وَتَعَالَى.","en":"Our acts of worship are the most tangible manifestations of our devotion to Allah the Almighty.","mn":"Их Эзэн Аллахад үнэнч байдгийн маань хамгийн тод илрэл бол бидний ибадат мөргөл юм."},{"tr":"İbadetler; yaratılış gayemizdir, imanımızın hayata yansımasıdır.","ar":"فَالْعِبَادَاتُ هِيَ الْغَايَةُ مِنْ وُجُودِنَا عَلَى الأَرْضِ، وَهِيَ إِنْعِكَاسٌ لِإِيمَانِنَا فِي حَيَاتِنَا.","en":"Worship is the very purpose of our creation and the reflection of our faith in our lives.","mn":"Ибадат бол бидний бүтээгдсэн зорилго, бидний итгэл амьдралд тусгагдсан хэлбэр юм."},{"tr":"Rabbimizin bize sunduğu nimetlere karşı şükrümüzün gereği, O’nun sonsuz rahmetine ulaşma arzumuzdur.","ar":"وَهِيَ مُقْتَضَى شُكْرِنَا لِرَبِّنَا عَلَى مَا أَنْعَمَ بِهِ عَلَيْنَا مِنْ نِعَمٍ، وَتَعْبِيرٌ عَنْ رَغْبَتِنَا فِي نَيْلِ رَحْمَتِهِ اللَّامُتَنَاهِيَةِ.","en":"It is an expression of our gratitude for the blessings bestowed upon us by our Lord and our longing to attain His infinite mercy.","mn":"Энэ нь Эзэний маань бидэнд хайрласан ач ивээлд талархах бидний үүрэг бөгөөд Түүний хязгааргүй нигүүлсэлд хүрэх бидний хүсэл юм."},{"tr":"İhlasla eda ettiğimiz her ibadet; dilimizin zikirle buluşmasına, hayatımızın mutlulukla dolmasına vesiledir.","ar":"وَكُلُّ عِبَادَةٍ نُؤَدِّيهَا بِإِخْلَاصٍ تَكُونُ سَبَبًا فِي أَنْ تَلْهَجَ أَلْسِنَتُنَا بِذِكْرِ اللَّهِ، وَأَنْ تَمْتَلِئَ حَيَاتُنَا بِالسَّعَادَةِ.","en":"Every act of worship we perform with sincerity brings our tongues to the remembrance of Allah and fills our lives with happiness.","mn":"Чин сэтгэлээр үйлдсэн ибадат бүр бидний хэлийг Аллахыг дурсахад хүргэж, амьдралыг маань аз жаргалаар дүүргэх шалтгаан болдог."},{"tr":"Aziz Müminler!","ar":"أَيُّهَا الْمُسْلِمُونَ الْأَعِزَّاءُ!","en":"Dear Believers!","mn":"Хүндэт итгэгчид ээ!"},{"tr":"Rabbimizin farz kıldığı, şekli ve vakti belli ibadetler, dinimizin direği ve kulluğumuzun özüdür.","ar":"إِنَّ الْعِبَادَاتِ الَّتِي فَرَضَهَا عَلَيْنَا رَبُّنَا سُبْحَانَهُ وَتَعَالَى، وَحَدَّدَ كَيْفِيَّةَ أَدَائِهَا وَأَوْقَاتَهَا، هِيَ عِمَادُ دِينِنَا وَجَوْهَرُ عُبُودِيَّتِنَا لِلَّهِ تَعَالَى.","en":"The acts of worship prescribed as obligatory by our Lord, with their prescribed forms and times, are the pillars of our religion and the essence of our servitude to Him.","mn":"Эзэний маань фарз болгосон, хэлбэр болон цаг хугацаа нь тогтоогдсон ибадатууд бол бидний шашны тулгуур багана, Түүнд зүтгэх бидний боолчлолын мөн чанар юм."},{"tr":"Namaz bizleri; hayâsızlıktan ve kötülükten uzak tutar, günahlardan temizler, gönlümüzü huzura erdirir.","ar":"فَالصَّلَاةُ تَنْهَانَا عَنِ الْفَحْشَاءِ وَالْمُنْكَرِ، وَتُطَهِّرُنَا مِنَ الذُّنُوبِ، وَتَبْعَثُ الطُّمَأْنِينَةَ فِي قُلُوبِنَا.","en":"Prayer keeps us away from indecency and evil, purifies us of our sins, and brings peace to our hearts.","mn":"Намаз биднийг ичгүүргүй, муу үйлсээс хол байлгаж, нүглээс ариусгаж, зүрх сэтгэлийг маань амар тайван болгодог."},{"tr":"Oruç; takvayı, sabrı, muhtacın derdiyle dertlenmeyi bizlere öğretir.","ar":"وَالصِّيَامُ يُعَلِّمُنَا التَّقْوَى وَالصَّبْرَ وَمُشَارَكَةَ الْمُحْتَاجِينَ في هُمُومِهِمْ.","en":"Fasting teaches us taqwa, patience, and compassion for those in need.","mn":"Мацаг барих нь бидэнд такваа, тэвчээр, гачигдалтай хүмүүсийн зовлонг хуваалцахыг сургадаг."},{"tr":"Zekât, malımızı ve servetimizi maddi ve manevi kirlerden arındırırken bizleri de cimrilik hastalığından korur.","ar":"وَالزَّكَاةُ تُطَهِّرُ أَمْوَالَنَا وَثَرَوَاتِنَا مِنَ الْأَدْرَانِ الْمَادِّيَّةِ وَالْمَعْنَوِيَّةِ، وَتُجَنِّبُنَا عَنْ مَرَضِ الْبُخْلِ.","en":"Zakat purifies our wealth and possessions of material and spiritual impurities while protecting us from the vice of miserliness.","mn":"Закат бидний эд хөрөнгийг материаллаг болон оюун санааны бузраас ариусгахын зэрэгцээ биднийг харамч занаас хамгаалдаг."},{"tr":"Hac ise kötü sözlerden, kavgadan ve öfkeden uzak kalmayı, bütün insanların Allah katında bir tarağın dişleri gibi eşit olduğunu bizlere hatırlatır.","ar":"أَمَّا الْحَجُّ فَيُذَكِّرُنَا بِضَرُورَةِ الِابْتِعَادِ عَنِ الْكَلَامِ السَّيِّئِ وَالْخِصَامِ وَالْغَضَبِ، وَبِأَنَّ النَّاسَ جَمِيعًا مُتَسَاوُونَ عِنْدَ اللَّهِ كَأَسْنَانِ الْمُشْطِ.","en":"Hajj reminds us to refrain from foul language, quarrels, and anger, and that all people are equal in the sight of Allah, like the teeth of a comb.","mn":"Хаж мөргөл харин муу үг, хэрүүл маргаан, уур хилэнгээс хол байх, бүх хүн Аллахын өмнө самны шүд адил тэгш гэдгийг бидэнд сануулдаг."},{"tr":"Kıymetli Müslümanlar!","ar":"أَيُّهَا الْمُسْلِمُونَ الْكِرَامُ!","en":"Esteemed Muslims!","mn":"Эрхэм мусульманчууд аа!"},{"tr":"Allah’ın rızasını gözeterek yaptığımız her iyilik ve her hayırlı iş aynı zamanda bir ibadettir.","ar":"إِنَّ كُلَّ خَيْرٍ وَعَمَلٍ صَالِحٍ نَفْعَلُهُ ابْتِغَاءَ مَرْضَاةِ اللَّهِ عِبَادَةٌ فِي الْوَقْتِ نَفْسِهِ.","en":"Every good deed and righteous act we perform seeking the pleasure of Allah is also an act of worship.","mn":"Аллахын таалалд нийцүүлэн хийсэн сайн үйлс, буянтай ажил бүр мөн ибадат юм."},{"tr":"Nitekim kendimizin ve ailemizin rızkını helal yollardan kazanmak, alışverişte dürüst olmak, çalışıp üretmek ibadettir.","ar":"فَالْعَمَلُ عَلَى كَسْبِ رِزْقِنَا وَرِزْقِ أُسْرَتِنَا مِنْ طُرُقٍ حَلَالٍ، وَالصِّدْقُ فِي الْبَيْعِ وَالشِّرَاءِ، وَالْعَمَلُ وَالْإِنْتَاجُ، كُلُّ ذَلِكَ عِبَادَةٌ.","en":"Indeed, earning a halal livelihood for ourselves and our families, being honest in our business dealings, and working and producing are all acts of worship.","mn":"Тухайлбал, өөрийн болон гэр бүлийнхээ хүнсийг халал замаар олох, худалдаа наймаандаа шударга байх, хөдөлмөрлөж бүтээх нь ибадат юм."},{"tr":"Ailemiz, akrabamız ve komşularımızla bağımızı güçlü tutmak, onlarla ilgilenmek, onların sevinçlerini ve kederlerini paylaşmak ibadettir.","ar":"وَتَوْثِيقُ صِلَتِنَا بِأُسْرَتِنَا وَأَقَارِبِنَا وَجِيرَانِنَا، وَالِاهْتِمَامُ بِهِمْ، وَمُشَارَكَتُهُمْ في أَفْرَاحِهِمْ وَأَحْزَانِهِمْ، عِبَادَةٌ.","en":"Maintaining strong ties with our families, relatives, and neighbors, caring for them, and sharing in their joys and sorrows are acts of worship.","mn":"Гэр бүл, төрөл садан, хөршүүдтэйгээ холбоогоо бат бөх байлгах, тэдэнд анхаарал тавих, баяр баясгалан, уй гашууг нь хуваалцах нь ибадат юм."},{"tr":"Engelli bir kardeşimizin hayatını kolaylaştırmak, ihtiyaç sahibi bir öğrencinin eğitimine destek olmak, geçim sıkıntısı çeken bir komşumuzun yardımına koşmak ibadettir.","ar":"وَتَيْسِيرُ حَيَاةِ أَحَدِ إِخْوَانِنَا مِنْ ذَوِي المُعَاقِين، وَدَعْمُ طَالِبٍ مُحْتَاجٍ فِي تَعْلِيمِهِ، وَالْمُسَارَعَةُ إِلَى اعانة جَارٍ يُعَانِي ضِيقَ الْعَيْشِ، كُلُّ ذَلِكَ عِبَادَةٌ.","en":"Making life easier for a brother or sister with a disability, supporting the education of a student in need, and extending a helping hand to a neighbor facing financial hardship are acts of worship.","mn":"Хөгжлийн бэрхшээлтэй ах дүүгийнхээ амьдралыг хөнгөвчлөх, тусламж хэрэгтэй сурагчийн боловсролд дэмжлэг үзүүлэх, амьжиргааны хүндрэлтэй хөршдөө туслахаар яарах нь ибадат юм."},{"tr":"Rahmet Elçisi (s.a.s)’in, “Kul, kardeşinin yardımında olduğu sürece, Allah da o kulun yardımcısıdır” muştusuna nail olabilmek ne büyük saadettir.","ar":"وَقَدْ بَشَّرَنَا رَسُولُ الرَّحْمَةِ ﷺ بِقَوْلِهِ: \"وَاللَّهُ فِي عَوْنِ الْعَبْدِ مَا كَانَ الْعَبْدُ فِي عَوْنِ أَخِيهِ.\" فَمَا أَعْظَمَ السَّعَادَةَ فِي أَنْ نَنَالَ هَذِهِ الْبُشْرَى.","en":"What a great blessing it is to receive the glad tidings of the Messenger of Mercy (saw): “Allah continues to help His servant as long as the servant helps his brother.”","mn":"Нигүүлслийн Элч (с.а.с)-ийн \"Боол ах дүүдээ тусалж байх хугацаанд Аллах ч мөн тэр боолд туслагч байна\" гэсэн сайн мэдээнд хүртэх нь ямар их аз жаргал вэ!"},{"tr":"Değerli Müminler!","ar":"أَيُّهَا الْمُؤْمِنُونَ الْأَفَاضِلُ!","en":"Honorable Believers!","mn":"Хүндэт итгэгчид ээ!"},{"tr":"Yeri geldiğinde yüzümüzde beliren bir tebessüm, yeri geldiğinde insanlara eziyet veren engelleri kaldırmak, yeri geldiğinde ise mazlum ve mağdurlara el uzatmak bir sadakadır ve her sadaka bir ibadettir.","ar":"قَدْ تَكُونُ الِابْتِسَامَةُ الَّتِي تَرْتَسِمُ عَلَى وُجُوهِنَا صَدَقَةً، وَقَدْ تَكُونُ إِمَاطَةُ مَا يُؤْذِي النَّاسَ عَنْ طَرِيقِهِمْ صَدَقَةً، وَقَدْ يَكُونُ مَدُّ يَدِ الْعَوْنِ إِلَى الْمَظْلُومِينَ وَالْمُتَضَرِّرِينَ صَدَقَةً، وَكُلُّ صَدَقَةٍ عِبَادَةٌ.","en":"A smile on our faces, removing obstacles that cause harm to others, or extending a helping hand to the oppressed and those who have suffered injustice are all forms of sadaqah, and every act of sadaqah is an act of worship.","mn":"Хэрэгтэй үед нүүрэндээ тодруулсан инээмсэглэл, хүмүүст саад болох зүйлийг замаас зайлуулах, хэлмэгдэгсэд болон хохирогчдод тусламжийн гар сунгах нь садака бөгөөд садака бүр ибадат юм."},{"tr":"Kimi zaman bir hastaya kan vererek can olmak, kimi zaman da çaresizce bekleyen bir kardeşimiz için dini ve tıbbi hassasiyetleri dikkate alarak organ bağışında bulunmak bir iyiliktir ve her iyilik bir ibadettir.","ar":"وَقَدْ يَكُونُ التَّبَرُّعُ بِالدَّمِ لِإِنْقَاذِ حَيَاةِ مَرِيضٍ، أَوِ التَّبَرُّعُ بِالْأَعْضَاءِ لِأَخٍ لَنَا يَنْتَظِرُ الْعَوْنَ وَلَا حِيلَةَ لَهُ دون ذلك، مَعَ مُرَاعَاةِ الِاعْتِبَارَاتِ الدِّينِيَّةِ وَالطِّبِّيَّةِ، عَمَلًا مِنْ أَعْمَالِ الْخَيْرِ، وَكُلُّ عَمَلٍ مِنْ أَعْمَالِ الْخَيْرِ عِبَادَةٌ.","en":"Whether it is saving a life by donating blood to a patient or donating an organ to a brother or sister desperately awaiting help, while taking religious and medical considerations into account, these are acts of goodness, and every good deed is an act of worship.","mn":"Заримдаа өвчтөнд цусаа өгч амийг нь аврах, заримдаа найдвар тасран хүлээж буй ах дүүдээ шашны болон анагаах ухааны шаардлагыг харгалзан эрхтэнээ хандивлах нь сайн үйл бөгөөд сайн үйл бүр ибадат юм."},{"tr":"Ayet-i kerime gayet açıktır: “…Kim, bir insanın hayatını kurtarırsa bütün insanların hayatını kurtarmış gibi olur…”","ar":"وَالْآيَةُ الْكَرِيمَةُ وَاضِحَةٌ جَلِيَّةٌ فِي هَذَا الشَّأْنِ، حَيْثُ قَالَ اللَّهُ تَعَالَى: \"وَمَنْ أَحْيَاهَا فَكَأَنَّمَا أَحْيَا النَّاسَ جَمِيعًا.\"","en":"The following verse of the Qur’an clearly states: “…Whoever saves a life, it will be as if they saved all of humanity…”","mn":"Ариун айат үүнийг тодорхой хэлдэг: \"...Хэн нэгэн хүний амийг аварвал бүх хүн төрөлхтний амийг аварсантай адил болно...\""},{"tr":"Aziz Kardeşlerim!","ar":"أَيُّهَا الْمُؤْمِنُونَ الْأَعِزَّاءُ!","en":"Dear Brothers and Sisters!","mn":"Эрхэм ах дүү нар аа!"},{"tr":"Ömrümüz kısa, dünya geçici, ahiret hayatı ise haktır, gerçektir ve ebedidir.","ar":"إِنَّ أَعْمَارَنَا قَصِيرَةٌ، وَالدُّنْيَا فَانِيَةٌ، أَمَّا حَيَاةُ الْآخِرَةِ فَهِيَ حَقٌّ لَا رَيْبَ فِيهِ، وَأَبَدِيَّةٌ.","en":"Our lives are short, this world is temporary, and the Hereafter is certain, real, and eternal.","mn":"Бидний нас богино, энэ дэлхий түр зуурынх, харин хойд насны амьдрал бол үнэн, бодит бөгөөд мөнхийн юм."},{"tr":"Gün gelir; nefesimiz biter, adımlarımız durur, dünyaya ait olan ne varsa geride bırakır gideriz.","ar":"وَسَيَأْتِي يَوْمٌ تَنْقَطِعُ فِيهِ أَنْفَاسُنَا، وَتَتَوَقَّفُ فِيهِ خُطَانَا، وَسَنَرْحَلُ عَنْ هَذِهِ الدُّنْيَا تَارِكِينَ وَرَاءَنَا كُلَّ مَا فِيهَا.","en":"A day will come when we take our last breath, our footsteps come to a halt, and we depart this world, leaving behind everything that belongs to it.","mn":"Нэг өдөр амьсгал маань тасарч, алхам маань зогсож, энэ дэлхийд хамаарах бүхнийг ардаа орхин явах болно."},{"tr":"Evet, Değerli Kardeşlerim!","ar":"نَعَمْ، أَيُّهَا الْإِخْوَةُ الْكِرَامُ!","en":"Indeed, Dear Brothers and Sisters!","mn":"Тийм ээ, эрхэм ах дүү нар аа!"},{"tr":"Asıl mesele, dünyada ne kadar kaldığımız değil, Allah’a olan kulluğumuz ve O’nun rızası için yaptığımız iyiliklerimizdir.","ar":"إِنَّ الْعِبْرَةَ لَيْسَتْ بِطُولِ مُكْثِنَا فِي الدُّنْيَا، وَإِنَّمَا بِعُبُودِيَّتِنَا لِلَّهِ تَعَالَى، وَبِمَا نَقُومُ بِهِ مِنْ أَعْمَالِ الْخَيْرِ ابْتِغَاءَ مَرْضَاتِهِ.","en":"What truly matters is not how long we remain in this world, but our devotion to Allah and the good deeds we perform seeking His pleasure.","mn":"Гол асуудал бол энэ дэлхийд хэр удаан амьдарсан нь бус, харин Аллахад зүтгэсэн бидний боолчлол болон Түүний таалалын төлөө хийсэн сайн үйлс маань юм."},{"tr":"Asıl mesele, Sevgili Peygamberimiz (s.a.s)’in, “…Allah katında amellerin en sevimlisi, az da olsa devamlı olanıdır” tavsiyesine uyarak ömrümüzü ibadete çevirebilmektir.","ar":"وَالْأَهَمُّ مِنْ ذَلِكَ أَنْ نَجْعَلَ حَيَاتَنَا كُلَّهَا عِبَادَةً، عَمَلًا بِوَصِيَّةِ نَبِيِّنَا الْحَبِيبِ ﷺ الَّذِي قَالَ: \"وَإِنَّ أَحَبَّ الْعَمَلِ إِلَى اللَّهِ أَدْوَمُهُ وَإِنْ قَلَّ\".4","en":"What truly matters is turning our entire lives into acts of worship by following the advice of our beloved Prophet (saw): “…The deeds most beloved to Allah are those performed consistently, even if they are few.”","mn":"Гол асуудал бол хайрт Бошиглогч (с.а.с)-ийн \"...Аллахын өмнө хамгийн хайртай үйлс бол бага ч гэсэн тогтмол хийгддэг нь юм\" гэсэн зөвлөгөөг дагаж, амьдралаа ибадат болгон хувиргах явдал юм."},{"tr":"Hutbemizi, Nahl sûresi doksan yedinci ayet-i kerimenin mealiyle bitiriyoruz: “Erkek ya da kadın, kim mümin olarak salih amel işlerse, elbette ona hoş bir hayat yaşatacağız ve onların mükâfatlarını yaptıklarına karşılık olarak en güzeliyle vereceğiz.”","ar":"وَنَخْتَتِمُ خُطْبَتَنَا بِقَوْلِ اللَّهِ تَعَالَى فِي الْآيَةِ السَّابِعَةِ وَالتِّسْعِينَ مِنْ سُورَةِ النَّحْلِ: \"مَنْ عَمِلَ صَالِحًا مِنْ ذَكَرٍ أَوْ أُنْثَى وَهُوَ مُؤْمِنٌ فَلَنُحْيِيَنَّهُ حَيَاةً طَيِّبَةً وَلَنَجْزِيَنَّهُمْ أَجْرَهُمْ بِأَحْسَنِ مَا كَانُوا يَعْمَلُونَ\".5","en":"We conclude this week’s khutbah with the meaning of verse 97 of Surah An-Nahl: “Whoever does good, whether male or female, and is a believer, We will surely bless them with a good life, and We will certainly reward them according to the best of their deeds.”","mn":"Хутбаагаа бид Нахл судрын ерэн долдугаар айатын утгаар төгсгөж байна: \"Эрэгтэй ч бай, эмэгтэй ч бай, итгэгч байхдаа сайн үйл хийсэн хэнд ч Бид сайхан амьдрал заяах бөгөөд тэдний шагналыг хийсэн үйлсийнх нь хамгийн сайнаар нь өгөх болно.\""}],"current":0,"note":"TR/AR/EN: Diyanet İşleri Başkanlığı Din Hizmetleri Genel Müdürlüğü. MN: taslak çeviri, kontrol edilmeli."}}];
+</script>
+<script>// Görevli (kontrol) ekranı
+(function () {
+  'use strict';
+  const $ = (s) => document.querySelector(s);
+  const $$ = (s) => document.querySelectorAll(s);
+  const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  let state = HutbeState.load();
+  let displayWin = null;
+  const preview = $('#preview');
+  const READY = window.HAZIR_HUTBELER || [];
+
+  // ---------- Bildirim ve onay (tarayıcı pencereleri yerine sayfa içinde) ----------
+  let toastTimer = null;
+  function toast(msg) {
+    const t = $('#toast');
+    t.textContent = msg;
+    t.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { t.hidden = true; }, msg.length > 90 ? 8000 : 3500);
+  }
+  function ask(msg, yesLabel = 'Tamam') {
+    return new Promise((resolve) => {
+      $('#askText').textContent = msg;
+      $('#askYes').textContent = yesLabel;
+      $('#ask').hidden = false;
+      $('#askYes').focus();
+      const done = (v) => { $('#ask').hidden = true; $('#askYes').onclick = $('#askNo').onclick = null; resolve(v); };
+      $('#askYes').onclick = () => done(true);
+      $('#askNo').onclick = () => done(false);
+    });
+  }
+
+  // ---------- Kayıt ve yayın ----------
+  let saveTimer = null;
+  function persist() { clearTimeout(saveTimer); saveTimer = setTimeout(() => HutbeState.save(state), 300); }
+  function commit(opts = {}) {
+    persist();
+    broadcast();
+    updateHeader();
+    if (!opts.keepTracker) syncTracker();
+  }
+  function post(win, msg) { try { if (win && !win.closed) win.postMessage(msg, '*'); } catch (e) { /* yok say */ } }
+  function broadcast() {
+    const msg = { type: 'state', state };
+    post(displayWin, msg);
+    post(preview.contentWindow, msg);
+  }
+  function sendCurrent() {
+    const msg = { type: 'goto', current: state.current };
+    post(displayWin, msg);
+    post(preview.contentWindow, msg);
+    persist();
+  }
+  window.addEventListener('message', (e) => {
+    const d = e.data || {};
+    if (d.type === 'hello') post(e.source, { type: 'state', state });
+    if (d.type === 'nav') go(state.current + d.step);
+  });
+
+  function updateHeader() {
+    $('#hutbeName').textContent = state.rows.length ? state.title : 'Hutbe yüklenmedi';
+    $('#total').textContent = state.rows.length || '–';
+    $('#curNo').textContent = state.rows.length ? state.current + 1 : '–';
+  }
+
+  // ---------- Sekmeler ----------
+  function showTab(name) {
+    $$('.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
+    $$('.tab').forEach((t) => { t.hidden = t.id !== 'tab-' + name; });
+    if (name === 'live') { renderLive(); scalePreview(); }
+    if (name === 'texts') { renderSources(); renderRows(); }
+    if (name === 'settings') renderSettings();
+  }
+  $$('.tabs button').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.tab)));
+
+  const trackLang = () => state.languages.find((l) => l.code === state.trackLang) || state.languages[0];
+
+  // ---------- Yayın ----------
+  function renderLive() {
+    const code = trackLang().code;
+    $('#trackLabel').textContent = trackLang().name + ' · imamın okuduğu';
+    const list = $('#liveList');
+    list.innerHTML = state.rows.map((r, i) => {
+      const words = String(r[code] || '').split(/\s+/).filter(Boolean).map((w) => `<span class="w">${esc(w)}</span>`).join(' ');
+      return `<li data-i="${i}" class="${i === state.current ? 'cur' : i < state.current ? 'done' : ''}"><span class="n">${i + 1}</span><span>${words || '<i>(boş)</i>'}</span></li>`;
+    }).join('') || '<li class="empty-msg">Henüz hutbe yok. Metinler bölümünden hazır bir hutbe yükleyin.</li>';
+    updateHeader();
+    markCurrent(false);
+  }
+  $('#liveList').addEventListener('click', (e) => {
+    const li = e.target.closest('li[data-i]');
+    if (li) go(+li.dataset.i);
+  });
+
+  function markCurrent(scroll = true) {
+    $$('#liveList li[data-i]').forEach((li) => {
+      const i = +li.dataset.i;
+      li.classList.toggle('cur', i === state.current);
+      li.classList.toggle('done', i < state.current);
+      if (i !== state.current) li.querySelectorAll('.w.hit').forEach((w) => w.classList.remove('hit'));
+    });
+    const cur = $('#liveList li.cur');
+    if (scroll && cur) cur.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    updateHeader();
+  }
+
+  function showProgress(i, progress) {
+    const li = $(`#liveList li[data-i="${i}"]`);
+    if (!li) return;
+    const ws = li.querySelectorAll('.w');
+    const n = Math.round(progress * ws.length);
+    ws.forEach((w, k) => w.classList.toggle('hit', k < n));
+  }
+
+  function go(i, fromTracker = false) {
+    if (!state.rows.length) return;
+    i = Math.max(0, Math.min(i, state.rows.length - 1));
+    state.current = i;
+    if (!fromTracker) tracker.goto(i);
+    markCurrent();
+    sendCurrent();
+  }
+
+  $('#btnPrev').onclick = () => go(state.current - 1);
+  $('#btnNext').onclick = () => go(state.current + 1);
+  $('#btnFirst').onclick = () => go(0);
+  window.addEventListener('keydown', (e) => {
+    if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName)) return;
+    if ($('#tab-live').hidden || !$('#ask').hidden) return;
+    if (['ArrowRight', 'PageDown', ' '].includes(e.key)) { e.preventDefault(); go(state.current + 1); }
+    if (['ArrowLeft', 'PageUp'].includes(e.key)) { e.preventDefault(); go(state.current - 1); }
+    if (e.key === 'b' || e.key === 'B') go(0);
+  });
+
+  // Tek dosya sürümünde (Hutbe-Ekrani.html) projeksiyon sayfası dosyanın içinde gömülü gelir
+  const EMBED = window.DISPLAY_HTML;
+  if (EMBED) preview.srcdoc = EMBED;
+
+  $('#btnOpen').onclick = () => {
+    displayWin = window.open(EMBED ? '' : 'display.html', 'hutbe-display', 'popup,width=1280,height=720');
+    if (!displayWin) { toast('Projeksiyon penceresi açılamadı. Tarayıcıda bu sayfa için açılır pencerelere izin verin.'); return; }
+    if (EMBED) { displayWin.document.open(); displayWin.document.write(EMBED); displayWin.document.close(); }
+    setTimeout(broadcast, 500);
+    toast('Pencereyi projeksiyona sürükleyin, çift tıklayıp tam ekran yapın.');
+  };
+
+  function scalePreview() {
+    const box = preview.parentElement;
+    if (box.clientWidth) preview.style.transform = `scale(${box.clientWidth / 1600})`;
+  }
+  window.addEventListener('resize', scalePreview);
+  if (window.ResizeObserver) new ResizeObserver(scalePreview).observe(preview.parentElement);
+  preview.addEventListener('load', broadcast);
+
+  // ---------- Ses takibi ----------
+  const tracker = new HutbeTracker.Tracker({
+    onChange: (i) => go(i, true),
+    onProgress: (i, p) => showProgress(i, p),
+  });
+  function syncTracker() {
+    const code = trackLang().code;
+    tracker.setSentences(state.rows.map((r) => r[code] || ''), state.current);
+  }
+
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let rec = null, listening = false;
+  function setMic(text, st) { $('#micText').textContent = text; $('#micPill').dataset.state = st; }
+
+  // Mikrofonu bir kez alıp açık tutar; tanıma yeniden başlarken Chrome'un tekrar izin sormasını azaltır
+  let micStream = null;
+  async function holdMic() {
+    if (micStream || !navigator.mediaDevices?.getUserMedia) return;
+    try { micStream = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch (e) { /* izin yoksa tanıma kendisi bildirir */ }
+  }
+  function releaseMic() { if (micStream) { micStream.getTracks().forEach((t) => t.stop()); micStream = null; } }
+
+  function startListening() {
+    holdMic(); // beklemeden: izin penceresi açık kalsa da dinleme başlar
+    if (!SR) { setMic('Ses tanıma yok', 'err'); toast('Bu tarayıcı ses tanımayı desteklemiyor. Google Chrome veya Microsoft Edge kullanın.'); return; }
+    rec = new SR();
+    rec.lang = trackLang().speech || 'tr-TR';
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.maxAlternatives = 1;
+    // Hata sonrası tanıma kendiliğinden yeniden başlayınca "Ses tanıma hatası" yazısı takılı kalmasın
+    rec.onstart = () => { if (listening) setMic('Dinleniyor', 'on'); };
+    rec.onresult = (e) => {
+      if (listening) setMic('Dinleniyor', 'on');
+      let interim = '';
+      for (let k = e.resultIndex; k < e.results.length; k++) {
+        const r = e.results[k];
+        if (r.isFinal) tracker.addFinal(r[0].transcript);
+        else interim += r[0].transcript + ' ';
+      }
+      tracker.setInterim(interim);
+      $('#heard').textContent = (interim || e.results[e.results.length - 1][0].transcript).slice(-160);
+    };
+    rec.onerror = (e) => {
+      if (e.error === 'no-speech' || e.error === 'aborted') return;
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+        listening = false; updateListenBtn();
+        setMic('Mikrofon kullanılamıyor', 'err');
+        toast(window.top !== window
+          ? 'Bu önizleme sayfasında mikrofon kullanılamaz. Ses takibi için programı bilgisayardaki index.html dosyasından Chrome ile açın. Burada cümleleri ok tuşlarıyla ilerletebilirsiniz.'
+          : 'Mikrofon izni verilmedi. Adres çubuğundaki mikrofon simgesinden izin verin.');
+        return;
+      }
+      setMic('Ses tanıma hatası', 'err');
+      toast('Ses tanıma hatası: ' + e.error + (e.error === 'network' ? '. İnternet bağlantısını kontrol edin.' : ''));
+    };
+    rec.onend = () => {
+      tracker.resetInterim();
+      if (listening) setTimeout(() => { try { rec.start(); } catch (err) { /* zaten çalışıyor */ } }, 150);
+    };
+    try { rec.start(); } catch (err) { /* yok say */ }
+    listening = true;
+    syncTracker();
+    setMic('Dinleniyor', 'on');
+    updateListenBtn();
+  }
+  function stopListening() {
+    listening = false;
+    try { rec && rec.stop(); } catch (err) { /* yok say */ }
+    releaseMic();
+    setMic('Mikrofon kapalı', 'off');
+    updateListenBtn();
+  }
+  function updateListenBtn() {
+    const b = $('#btnListen');
+    b.dataset.on = String(listening);
+    b.querySelector('.lbl').textContent = listening ? 'Dinlemeyi durdur' : 'Dinlemeyi başlat';
+  }
+  $('#btnListen').onclick = () => (listening ? stopListening() : startListening());
+
+  // ---------- Hazır hutbeler ----------
+  $('#readyList').innerHTML = READY.length
+    ? READY.map((h, i) => `<option value="${i}">${esc(h.date)} · ${esc(h.title)}</option>`).join('')
+    : '<option value="">Hazır hutbe yok</option>';
+
+  function loadReady(idx) {
+    const h = HutbeState.clone(READY[idx].data);
+    for (const code of Object.keys(h.sources)) {
+      if (!state.languages.some((l) => l.code === code)) state.languages.push({ code, name: code, dir: 'ltr', show: true, size: 1, speech: '' });
+    }
+    state.sources = Object.assign({}, state.sources, h.sources);
+    state.rows = h.rows;
+    if (h.title) state.title = h.title;
+    state.current = 0;
+    commit();
+    return h;
+  }
+
+  $('#btnReady').onclick = async () => {
+    const f = $('#readyList').value;
+    if (f === '') return;
+    if (state.rows.length && !(await ask('Şu anki hutbenin yerine seçilen hutbe yüklenecek. Tablodaki düzeltmeleriniz silinir.', 'Yükle'))) return;
+    const h = loadReady(+f);
+    renderSources(); renderRows(); renderLive();
+    info(`${h.rows.length} satır yüklendi.` + (h.note ? ' ' + h.note : ''));
+    toast('Hutbe yüklendi');
+  };
+
+  function info(text) { const n = $('#alignInfo'); n.textContent = text; n.hidden = !text; }
+
+  // ---------- Metinler ve eşleme ----------
+  $('#btnNew').onclick = () => {
+    const p = $('#newPanel');
+    p.hidden = !p.hidden;
+    $('#btnNew').textContent = p.hidden ? 'Yeni hutbe gir' : 'Paneli kapat';
+    if (!p.hidden) renderSources();
+  };
+
+  function renderSources() {
+    $('#sources').innerHTML = state.languages.map((l) =>
+      `<label>${esc(l.name)}${l.code === state.trackLang ? ' <small>imamın okuduğu</small>' : ''}
+        <textarea id="src-${esc(l.code)}" data-code="${esc(l.code)}" dir="${l.dir}" placeholder="${esc(l.name)} metnini yapıştırın">${esc(state.sources[l.code] || '')}</textarea></label>`).join('');
+  }
+  $('#sources').addEventListener('input', (e) => {
+    const t = e.target.closest('textarea[data-code]');
+    if (!t) return;
+    state.sources[t.dataset.code] = t.value;
+    persist();
+  });
+
+  $('#btnAlign').onclick = async () => {
+    const code = state.trackLang;
+    if (!(state.sources[code] || '').trim()) { toast(trackLang().name + ' metni boş. Önce imamın okuyacağı metni girin.'); return; }
+    if (state.rows.length && !(await ask('Mevcut eşleme ve tablodaki düzeltmeleriniz silinip metinler yeniden eşlenecek.', 'Yeniden eşle'))) return;
+    const texts = {};
+    for (const l of state.languages) texts[l.code] = state.sources[l.code] || '';
+    state.rows = HutbeAlign.autoAlign(texts, code);
+    state.current = 0;
+    const counts = state.languages.filter((l) => texts[l.code].trim())
+      .map((l) => `${l.name} ${HutbeAlign.splitSentences(HutbeAlign.cleanText(texts[l.code])).length}`).join(', ');
+    info(`${state.rows.length} satır oluştu. Cümle sayıları: ${counts}.`);
+    renderRows(); commit(); renderLive();
+    toast('Metinler eşlendi');
+  };
+
+  function renderRows() {
+    const langs = state.languages;
+    const head = '<tr><th>#</th>' + langs.map((l) => `<th>${esc(l.name)}</th>`).join('') + '<th><span class="sr">Satır işlemleri</span></th></tr>';
+    const body = state.rows.map((r, i) => '<tr>' +
+      `<td class="idx">${i + 1}</td>` +
+      langs.map((l) => `<td><textarea id="cell-${i}-${esc(l.code)}" data-i="${i}" data-code="${esc(l.code)}" dir="${l.dir}" class="${r[l.code] ? '' : 'empty'}" aria-label="${i + 1}. satır, ${esc(l.name)}">${esc(r[l.code] || '')}</textarea>
+        <div class="tools">
+          <button data-op="pull" data-i="${i}" data-code="${esc(l.code)}" title="Alt satırın ilk cümlesini bu hücreye al">Alttan al</button>
+          <button data-op="push" data-i="${i}" data-code="${esc(l.code)}" title="Bu hücrenin son cümlesini alt satıra gönder">Aşağı gönder</button>
+        </div></td>`).join('') +
+      `<td class="rowtools"><div class="tools">
+        <button data-op="merge" data-i="${i}" title="Alt satırla birleştir">Birleştir</button>
+        <button data-op="insert" data-i="${i}" title="Altına boş satır ekle">Satır ekle</button>
+        <button data-op="delete" data-i="${i}" class="del" title="Satırı sil">Sil</button>
+      </div></td></tr>`).join('');
+    $('#rowsTable').innerHTML = '<thead>' + head + '</thead><tbody>' +
+      (body || `<tr><td colspan="${langs.length + 2}" class="muted" style="padding:20px">Henüz satır yok. Hazır bir hutbe yükleyin veya yeni hutbe girin.</td></tr>`) + '</tbody>';
+  }
+
+  $('#rowsTable').addEventListener('input', (e) => {
+    const t = e.target.closest('textarea[data-code]');
+    if (!t) return;
+    state.rows[+t.dataset.i][t.dataset.code] = t.value;
+    t.classList.toggle('empty', !t.value);
+    commit();
+  });
+
+  $('#rowsTable').addEventListener('click', async (e) => {
+    const b = e.target.closest('button[data-op]');
+    if (!b) return;
+    const i = +b.dataset.i, code = b.dataset.code, rows = state.rows;
+    const split = (s) => HutbeAlign.splitSentences(s || '');
+    switch (b.dataset.op) {
+      case 'pull': {
+        if (i + 1 >= rows.length) return;
+        const below = split(rows[i + 1][code]);
+        if (!below.length) return;
+        rows[i][code] = [rows[i][code], below.shift()].filter(Boolean).join(' ');
+        rows[i + 1][code] = below.join(' ');
+        break;
+      }
+      case 'push': {
+        const mine = split(rows[i][code]);
+        if (!mine.length) return;
+        if (i + 1 >= rows.length) rows.push({});
+        rows[i + 1][code] = [mine.pop(), rows[i + 1][code]].filter(Boolean).join(' ');
+        rows[i][code] = mine.join(' ');
+        break;
+      }
+      case 'merge': {
+        if (i + 1 >= rows.length) return;
+        for (const l of state.languages) rows[i][l.code] = [rows[i][l.code], rows[i + 1][l.code]].filter(Boolean).join(' ');
+        rows.splice(i + 1, 1);
+        break;
+      }
+      case 'insert': rows.splice(i + 1, 0, {}); break;
+      case 'delete':
+        if (!(await ask(`${i + 1}. satır tüm dillerde silinecek.`, 'Sil'))) return;
+        rows.splice(i, 1);
+        break;
+    }
+    if (state.current >= rows.length) state.current = Math.max(0, rows.length - 1);
+    renderRows();
+    commit();
+  });
+
+  // ---------- Ayarlar ----------
+  const DEFAULT_LOGO = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M62 8a42 42 0 1 0 30 70A36 36 0 1 1 62 8z" fill="#c9a24a"/>' +
+    '<g fill="#1f5f63"><path d="M38 78V60q12-16 24 0v18z"/><rect x="30" y="52" width="3" height="26"/><rect x="67" y="52" width="3" height="26"/></g></svg>');
+
+  function renderSettings() {
+    $('#optTitle').value = state.title || '';
+    $('#optPer').value = state.perPage;
+    $('#optNums').checked = !!state.showNumbers;
+    $('#logoPrev').src = state.logo || DEFAULT_LOGO;
+    renderLangs();
+  }
+  $('#optTitle').oninput = (e) => { state.title = e.target.value; commit({ keepTracker: true }); };
+  $('#optPer').oninput = (e) => { state.perPage = Math.max(1, Math.min(6, +e.target.value || 1)); commit({ keepTracker: true }); };
+  $('#optNums').onchange = (e) => { state.showNumbers = e.target.checked; commit({ keepTracker: true }); };
+  $('#optLogo').onchange = (e) => {
+    const f = e.target.files[0];
+    if (!f) return;
+    const rd = new FileReader();
+    rd.onload = () => { state.logo = rd.result; renderSettings(); commit({ keepTracker: true }); toast('Logo güncellendi'); };
+    rd.readAsDataURL(f);
+    e.target.value = '';
+  };
+  $('#btnLogoReset').onclick = () => { state.logo = null; renderSettings(); commit({ keepTracker: true }); };
+
+  function renderLangs() {
+    const ls = state.languages;
+    $('#langTable').innerHTML = '<thead><tr><th>Sıra</th><th>Dil</th><th>Kod</th><th>Yön</th><th>Ekranda</th><th>Boyut</th><th>Takip</th><th>Ses dili</th><th></th></tr></thead><tbody>' +
+      ls.map((l, i) => `<tr data-i="${i}">
+        <td><div class="order"><button data-act="up" ${i ? '' : 'disabled'} aria-label="Yukarı">↑</button><button data-act="down" ${i < ls.length - 1 ? '' : 'disabled'} aria-label="Aşağı">↓</button></div></td>
+        <td><input type="text" id="ln-${i}" data-f="name" value="${esc(l.name)}" aria-label="Dil adı"></td>
+        <td><input type="text" id="lc-${i}" data-f="code" value="${esc(l.code)}" size="4" aria-label="Kod"></td>
+        <td><select id="ld-${i}" data-f="dir" aria-label="Yön"><option value="ltr" ${l.dir === 'ltr' ? 'selected' : ''}>Soldan sağa</option><option value="rtl" ${l.dir === 'rtl' ? 'selected' : ''}>Sağdan sola</option></select></td>
+        <td><input type="checkbox" id="lv-${i}" data-f="show" ${l.show ? 'checked' : ''} aria-label="Ekranda göster"></td>
+        <td><input type="number" id="lz-${i}" data-f="size" step="0.05" min="0.4" max="3" value="${l.size}" aria-label="Yazı boyutu"></td>
+        <td><input type="radio" id="lt-${i}" name="track" data-f="track" ${l.code === state.trackLang ? 'checked' : ''} aria-label="Takip dili"></td>
+        <td><input type="text" id="ls-${i}" data-f="speech" value="${esc(l.speech || '')}" size="6" placeholder="tr-TR" aria-label="Ses tanıma dili"></td>
+        <td><button class="x" data-act="del" ${l.code === state.trackLang ? 'disabled title="Takip dili silinemez"' : ''} aria-label="Sil">Sil</button></td>
+      </tr>`).join('') + '</tbody>';
+  }
+
+  $('#langTable').addEventListener('change', (e) => {
+    const tr = e.target.closest('tr[data-i]');
+    if (!tr) return;
+    const l = state.languages[+tr.dataset.i];
+    const f = e.target.dataset.f;
+    if (f === 'show') l.show = e.target.checked;
+    else if (f === 'track') state.trackLang = l.code;
+    else if (f === 'size') l.size = +e.target.value || 1;
+    else if (f === 'code') {
+      const nc = e.target.value.trim();
+      if (!nc || state.languages.some((x) => x !== l && x.code === nc)) { toast('Bu kod boş ya da başka bir dilde kullanılıyor.'); e.target.value = l.code; return; }
+      const old = l.code;
+      state.sources[nc] = state.sources[old]; delete state.sources[old];
+      state.rows.forEach((r) => { if (old in r) { r[nc] = r[old]; delete r[old]; } });
+      if (state.trackLang === old) state.trackLang = nc;
+      l.code = nc;
+    } else l[f] = e.target.value;
+    renderLangs();
+    commit();
+  });
+  $('#langTable').addEventListener('click', async (e) => {
+    const b = e.target.closest('button[data-act]');
+    if (!b) return;
+    const i = +b.closest('tr').dataset.i, ls = state.languages;
+    if (b.dataset.act === 'up') [ls[i - 1], ls[i]] = [ls[i], ls[i - 1]];
+    if (b.dataset.act === 'down') [ls[i + 1], ls[i]] = [ls[i], ls[i + 1]];
+    if (b.dataset.act === 'del') {
+      if (!(await ask(`${ls[i].name} dili ve bu dildeki bütün metinler silinecek.`, 'Sil'))) return;
+      const code = ls[i].code;
+      ls.splice(i, 1);
+      delete state.sources[code];
+      state.rows.forEach((r) => delete r[code]);
+    }
+    renderLangs();
+    commit();
+  });
+  $('#addLang').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const name = $('#newLangName').value.trim();
+    const code = $('#newLangCode').value.trim();
+    if (!name || !code) return;
+    if (state.languages.some((l) => l.code === code)) { toast('Bu kod zaten kullanılıyor.'); return; }
+    state.languages.push({ code, name, dir: $('#newLangDir').value, show: true, size: 1, speech: '' });
+    state.sources[code] = '';
+    $('#newLangName').value = ''; $('#newLangCode').value = '';
+    renderLangs();
+    commit();
+    toast(name + ' eklendi. Metinler bölümünden bu dilin metnini girin.');
+  });
+
+  $('#btnExport').onclick = () => {
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'hutbe-' + new Date().toISOString().slice(0, 10) + '.json';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  };
+  $('#fileImport').onchange = (e) => {
+    const f = e.target.files[0];
+    if (!f) return;
+    f.text().then((t) => {
+      try {
+        state = Object.assign(HutbeState.clone(HutbeState.DEFAULT), JSON.parse(t));
+        renderSettings(); commit(); renderLive();
+        toast('Hutbe dosyası yüklendi');
+      } catch (err) { toast('Dosya okunamadı: ' + err.message); }
+    });
+    e.target.value = '';
+  };
+
+  // ---------- Başlangıç ----------
+  if (!state.rows.length && READY.length) loadReady(0); // ilk açılışta en yeni hazır hutbe gelir
+  syncTracker();
+  renderLive();
+  scalePreview();
+})();
+</script>
+</body>
+</html>
