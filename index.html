@@ -356,7 +356,7 @@ table.langs .badge { font-size: 11px; font-weight: 600; text-transform: uppercas
   root.HutbeState = { DEFAULT, load, save, clone };
 })(window);
 
-window.DISPLAY_HTML = "<!doctype html>\n<html lang=\"tr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>Hutbe Ekranı<\/title>\n<link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">\n<link href=\"https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Noto+Sans:wght@400;600&display=swap\" rel=\"stylesheet\">\n<style>\n  :root {\n    --teal: #1f5f63;\n    --teal-2: #2f7f83;\n    --gold: #c9a24a;\n    --paper: #fbfaf6;\n    --ink: #1d2a2b;\n    --scale: 1;\n  }\n  * { box-sizing: border-box; }\n  html, body { margin: 0; height: 100%; background: var(--paper); color: var(--ink); overflow: hidden; cursor: none; }\n  body { font-family: 'Noto Sans', 'Segoe UI', Arial, sans-serif; display: flex; flex-direction: column; }\n\n  header {\n    position: relative; display: flex; align-items: center; gap: 1.2vw;\n    height: 13vh; padding: 0 2.5vw;\n    background: linear-gradient(90deg, #fff 0 45%, #e3efee 100%);\n    border-bottom: .35vh solid var(--gold);\n  }\n  header .logo { height: 9.5vh; width: auto; max-width: 24vw; object-fit: contain; }\n  header .sep { width: 2px; height: 7vh; background: var(--gold); opacity: .7; }\n  header .title { font-size: 3.6vh; font-weight: 600; color: var(--teal); }\n  header .deco { position: absolute; right: 2vw; bottom: 0; height: 11vh; opacity: .9; }\n  .lang-tag { font-size: 1.6vh; color: #6b7b7c; margin-left: auto; margin-right: 14vw; letter-spacing: .05em; }\n\n  main { flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 1.5vh 4vw 2vh; overflow: hidden; }\n  .row {\n    display: grid; grid-template-columns: 6vh 1fr; align-items: center; gap: 1.5vw;\n    padding: 1.6vh 1.5vw; border-radius: 1.2vh; transition: opacity .5s, background .5s, transform .5s;\n    opacity: .32;\n  }\n  .row + .row { border-top: 1px solid rgba(201,162,74,.55); border-radius: 0; }\n  .row.current { opacity: 1; background: rgba(47,127,131,.06); border-radius: 1.2vh; }\n  .row.done { opacity: .45; }\n  .num {\n    width: 5.2vh; height: 5.2vh; display: grid; place-items: center; color: #fff; font-weight: 600; font-size: 2.4vh;\n    background: var(--teal); clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);\n  }\n  .row.current .num { background: var(--gold); }\n  .texts { text-align: center; }\n  .line { margin: .4vh 0; line-height: 1.35; font-size: calc(3vh * var(--s, 1) * var(--scale)); }\n  .line[dir=rtl] { font-family: 'Amiri', 'Traditional Arabic', 'Scheherazade New', serif; line-height: 1.6; font-weight: 700; }\n  .nonum { grid-template-columns: 1fr; }\n  .empty { text-align: center; color: #8a9697; font-size: 3vh; }\n<\/style>\n<\/head>\n<body>\n<header>\n  <img class=\"logo\" id=\"logo\" alt=\"Logo\">\n  <div class=\"sep\"><\/div>\n  <div class=\"title\" id=\"title\"><\/div>\n  <svg class=\"deco\" viewBox=\"0 0 200 100\" aria-hidden=\"true\">\n    <path d=\"M10 100 Q100 10 190 100 Z\" fill=\"#2f7f83\" opacity=\".18\"/>\n    <g fill=\"#1f5f63\" opacity=\".55\">\n      <rect x=\"40\" y=\"55\" width=\"6\" height=\"45\"/><path d=\"M43 40 l4 15 h-8z\"/>\n      <rect x=\"154\" y=\"55\" width=\"6\" height=\"45\"/><path d=\"M157 40 l4 15 h-8z\"/>\n      <path d=\"M70 100 V75 Q100 35 130 75 V100z\"/>\n      <circle cx=\"100\" cy=\"40\" r=\"3\"/>\n    <\/g>\n  <\/svg>\n<\/header>\n<main id=\"main\"><\/main>\n\n<script>// Ortak ayarlar ve kayıt\n(function (root) {\n  'use strict';\n  const KEY = 'hutbe-ekran.v1';\n\n  const DEFAULT = {\n    title: 'Cuma Hutbesi',\n    logo: null, // data URL; boşsa varsayılan hilal-cami simgesi\n    trackLang: 'tr',\n    perPage: 3,\n    showNumbers: true,\n    languages: [\n      { code: 'tr', name: 'Türkçe', dir: 'ltr', show: false, size: 1, speech: 'tr-TR' },\n      { code: 'ar', name: 'Arapça', dir: 'rtl', show: true, size: 1.3, speech: 'ar-SA' },\n      { code: 'mn', name: 'Moğolca', dir: 'ltr', show: true, size: 1, speech: 'mn-MN' },\n      { code: 'en', name: 'İngilizce', dir: 'ltr', show: true, size: 0.9, speech: 'en-US' },\n    ],\n    sources: { tr: '', ar: '', mn: '', en: '' },\n    rows: [],\n    current: 0,\n  };\n\n  function clone(x) { return JSON.parse(JSON.stringify(x)); }\n\n  function load() {\n    try {\n      const raw = localStorage.getItem(KEY);\n      if (raw) return Object.assign(clone(DEFAULT), JSON.parse(raw));\n    } catch (e) { /* kayıt okunamadı */ }\n    return clone(DEFAULT);\n  }\n\n  function save(state) {\n    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { console.warn('Kaydedilemedi', e); }\n  }\n\n  root.HutbeState = { DEFAULT, load, save, clone };\n})(window);\n<\/script>\n<script>\n(function () {\n  'use strict';\n  const DEFAULT_LOGO = 'data:image/svg+xml;utf8,' + encodeURIComponent(\n    '<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 100 100\"><path d=\"M62 8a42 42 0 1 0 30 70A36 36 0 1 1 62 8z\" fill=\"#c9a24a\"/>' +\n    '<g fill=\"#1f5f63\"><path d=\"M38 78V60q12-16 24 0v18z\"/><rect x=\"30\" y=\"52\" width=\"3\" height=\"26\"/><rect x=\"67\" y=\"52\" width=\"3\" height=\"26\"/><\/g><\/svg>');\n\n  let state = HutbeState.load();\n  const main = document.getElementById('main');\n\n  function esc(s) { return String(s).replace(/[&<>\"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;' }[c])); }\n\n  function render() {\n    document.getElementById('logo').src = state.logo || DEFAULT_LOGO;\n    document.getElementById('title').textContent = state.title || '';\n    const rows = state.rows || [];\n    const langs = state.languages.filter((l) => l.show);\n    if (!rows.length) { main.innerHTML = '<div class=\"empty\">Hutbe metni henüz yüklenmedi<\/div>'; return; }\n    const per = Math.max(1, state.perPage | 0);\n    const cur = Math.min(state.current | 0, rows.length - 1);\n    const start = Math.floor(cur / per) * per;\n    let html = '';\n    for (let i = start; i < Math.min(rows.length, start + per); i++) {\n      const r = rows[i];\n      const cls = i === cur ? 'current' : i < cur ? 'done' : '';\n      html += `<div class=\"row ${cls} ${state.showNumbers ? '' : 'nonum'}\">` +\n        (state.showNumbers ? `<div class=\"num\">${i + 1}<\/div>` : '') + '<div class=\"texts\">';\n      for (const l of langs) {\n        const t = r[l.code];\n        if (!t) continue;\n        html += `<div class=\"line\" dir=\"${l.dir}\" lang=\"${esc(l.code)}\" style=\"--s:${l.size || 1}\">${esc(t)}<\/div>`;\n      }\n      html += '<\/div><\/div>';\n    }\n    main.innerHTML = html;\n    fit();\n  }\n\n  // Yazı ekrana sığana kadar küçült\n  function fit() {\n    let s = 1.25;\n    document.documentElement.style.setProperty('--scale', s);\n    while (main.scrollHeight > main.clientHeight + 1 && s > 0.35) {\n      s -= 0.05;\n      document.documentElement.style.setProperty('--scale', s.toFixed(2));\n    }\n  }\n\n  window.addEventListener('message', (e) => {\n    const d = e.data || {};\n    if (d.type === 'state') { state = d.state; render(); }\n    else if (d.type === 'goto') { state.current = d.current; render(); }\n  });\n  window.addEventListener('storage', () => { state = HutbeState.load(); render(); });\n  window.addEventListener('resize', fit);\n  // Projeksiyon penceresinde de tuşlarla ileri/geri\n  window.addEventListener('keydown', (e) => {\n    const src = window.opener || (window.parent !== window ? window.parent : null);\n    if (!src) return;\n    if (['ArrowRight', 'PageDown', ' '].includes(e.key)) src.postMessage({ type: 'nav', step: 1 }, '*');\n    if (['ArrowLeft', 'PageUp'].includes(e.key)) src.postMessage({ type: 'nav', step: -1 }, '*');\n    if (e.key === 'f' || e.key === 'F') document.documentElement.requestFullscreen?.();\n  });\n  document.addEventListener('dblclick', () => document.documentElement.requestFullscreen?.());\n  if (document.fonts) document.fonts.ready.then(fit);\n  render();\n  const src = window.opener || (window.parent !== window ? window.parent : null);\n  if (src) src.postMessage({ type: 'hello' }, '*');\n})();\n<\/script>\n<\/body>\n<\/html>\n";</script>
+window.DISPLAY_HTML = "<!doctype html>\n<html lang=\"tr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>Hutbe Ekranı<\/title>\n<link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">\n<link href=\"https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Noto+Sans:wght@400;600&display=swap\" rel=\"stylesheet\">\n<style>\n  :root {\n    --teal: #1f5f63;\n    --teal-2: #2f7f83;\n    --gold: #c9a24a;\n    --paper: #fbfaf6;\n    --ink: #1d2a2b;\n    --scale: 1;\n  }\n  * { box-sizing: border-box; }\n  html, body { margin: 0; height: 100%; background: var(--paper); color: var(--ink); overflow: hidden; cursor: none; }\n  body { font-family: 'Noto Sans', 'Segoe UI', Arial, sans-serif; display: flex; flex-direction: column; }\n\n  header {\n    position: relative; display: flex; align-items: center; gap: 1.2vw;\n    height: 13vh; padding: 0 2.5vw;\n    background: linear-gradient(90deg, #fff 0 45%, #e3efee 100%);\n    border-bottom: .35vh solid var(--gold);\n  }\n  header .logo { height: 9.5vh; width: auto; max-width: 24vw; object-fit: contain; }\n  header .sep { width: 2px; height: 7vh; background: var(--gold); opacity: .7; }\n  header .title { font-size: 3.6vh; font-weight: 600; color: var(--teal); }\n  header .deco { position: absolute; right: 2vw; bottom: 0; height: 11vh; opacity: .9; }\n  .lang-tag { font-size: 1.6vh; color: #6b7b7c; margin-left: auto; margin-right: 14vw; letter-spacing: .05em; }\n\n  main { flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 1.5vh 4vw 2vh; overflow: hidden; }\n  .row {\n    display: grid; grid-template-columns: 6vh 1fr; align-items: center; gap: 1.5vw;\n    padding: 1.6vh 1.5vw; border-radius: 1.2vh; transition: opacity .5s, background .5s, transform .5s;\n    opacity: .32;\n  }\n  .row + .row { border-top: 1px solid rgba(201,162,74,.55); border-radius: 0; }\n  .row.current { opacity: 1; background: rgba(47,127,131,.06); border-radius: 1.2vh; }\n  .row.done { opacity: .45; }\n  .num {\n    width: 5.2vh; height: 5.2vh; display: grid; place-items: center; color: #fff; font-weight: 600; font-size: 2.4vh;\n    background: var(--teal); clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);\n  }\n  .row.current .num { background: var(--gold); }\n  .texts { text-align: center; }\n  .line { margin: .4vh 0; line-height: 1.35; font-size: calc(3vh * var(--s, 1) * var(--scale)); }\n  .line[dir=rtl] { font-family: 'Amiri', 'Traditional Arabic', 'Scheherazade New', serif; line-height: 1.6; font-weight: 700; }\n  .nonum { grid-template-columns: 1fr; }\n  .empty { text-align: center; color: #8a9697; font-size: 3vh; }\n<\/style>\n<\/head>\n<body>\n<header>\n  <img class=\"logo\" id=\"logo\" alt=\"Logo\">\n  <div class=\"sep\"><\/div>\n  <div class=\"title\" id=\"title\"><\/div>\n  <svg class=\"deco\" viewBox=\"0 0 200 100\" aria-hidden=\"true\">\n    <path d=\"M10 100 Q100 10 190 100 Z\" fill=\"#2f7f83\" opacity=\".18\"/>\n    <g fill=\"#1f5f63\" opacity=\".55\">\n      <rect x=\"40\" y=\"55\" width=\"6\" height=\"45\"/><path d=\"M43 40 l4 15 h-8z\"/>\n      <rect x=\"154\" y=\"55\" width=\"6\" height=\"45\"/><path d=\"M157 40 l4 15 h-8z\"/>\n      <path d=\"M70 100 V75 Q100 35 130 75 V100z\"/>\n      <circle cx=\"100\" cy=\"40\" r=\"3\"/>\n    <\/g>\n  <\/svg>\n<\/header>\n<main id=\"main\"><\/main>\n\n<script>// Ortak ayarlar ve kayıt\n(function (root) {\n  'use strict';\n  const KEY = 'hutbe-ekran.v1';\n\n  const DEFAULT = {\n    title: 'Cuma Hutbesi',\n    logo: null, // data URL; boşsa varsayılan hilal-cami simgesi\n    trackLang: 'tr',\n    perPage: 3,\n    showNumbers: true,\n    languages: [\n      { code: 'tr', name: 'Türkçe', dir: 'ltr', show: false, size: 1, speech: 'tr-TR' },\n      { code: 'ar', name: 'Arapça', dir: 'rtl', show: true, size: 1.3, speech: 'ar-SA' },\n      { code: 'mn', name: 'Moğolca', dir: 'ltr', show: true, size: 1, speech: 'mn-MN' },\n      { code: 'en', name: 'İngilizce', dir: 'ltr', show: true, size: 0.9, speech: 'en-US' },\n    ],\n    sources: { tr: '', ar: '', mn: '', en: '' },\n    rows: [],\n    current: 0,\n  };\n\n  function clone(x) { return JSON.parse(JSON.stringify(x)); }\n\n  function load() {\n    try {\n      const raw = localStorage.getItem(KEY);\n      if (raw) return Object.assign(clone(DEFAULT), JSON.parse(raw));\n    } catch (e) { /* kayıt okunamadı */ }\n    return clone(DEFAULT);\n  }\n\n  function save(state) {\n    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { console.warn('Kaydedilemedi', e); }\n  }\n\n  root.HutbeState = { DEFAULT, load, save, clone };\n})(window);\n<\/script>\n<script>\n(function () {\n  'use strict';\n  const DEFAULT_LOGO = 'data:image/svg+xml;utf8,' + encodeURIComponent(\n    '<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 100 100\"><path d=\"M62 8a42 42 0 1 0 30 70A36 36 0 1 1 62 8z\" fill=\"#c9a24a\"/>' +\n    '<g fill=\"#1f5f63\"><path d=\"M38 78V60q12-16 24 0v18z\"/><rect x=\"30\" y=\"52\" width=\"3\" height=\"26\"/><rect x=\"67\" y=\"52\" width=\"3\" height=\"26\"/><\/g><\/svg>');\n\n  let state = HutbeState.load();\n  const main = document.getElementById('main');\n\n  function esc(s) { return String(s).replace(/[&<>\"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;' }[c])); }\n\n  function render() {\n    document.getElementById('logo').src = state.logo || DEFAULT_LOGO;\n    document.getElementById('title').textContent = state.title || '';\n    const rows = state.rows || [];\n    const langs = state.languages.filter((l) => l.show);\n    if (!rows.length) { main.innerHTML = '<div class=\"empty\">Hutbe metni henüz yüklenmedi<\/div>'; return; }\n    const per = Math.max(1, state.perPage | 0);\n    const cur = Math.min(state.current | 0, rows.length - 1);\n    const start = Math.floor(cur / per) * per;\n    let html = '';\n    for (let i = start; i < Math.min(rows.length, start + per); i++) {\n      const r = rows[i];\n      const cls = i === cur ? 'current' : i < cur ? 'done' : '';\n      html += `<div class=\"row ${cls} ${state.showNumbers ? '' : 'nonum'}\">` +\n        (state.showNumbers ? `<div class=\"num\">${i + 1}<\/div>` : '') + '<div class=\"texts\">';\n      for (const l of langs) {\n        const t = r[l.code];\n        if (!t) continue;\n        html += `<div class=\"line\" dir=\"${l.dir}\" lang=\"${esc(l.code)}\" style=\"--s:${l.size || 1}\">${esc(t)}<\/div>`;\n      }\n      html += '<\/div><\/div>';\n    }\n    main.innerHTML = html;\n    fit();\n  }\n\n  // Yazı ekrana sığana kadar küçült\n  function fit() {\n    let s = 1.25;\n    document.documentElement.style.setProperty('--scale', s);\n    while (main.scrollHeight > main.clientHeight + 1 && s > 0.35) {\n      s -= 0.05;\n      document.documentElement.style.setProperty('--scale', s.toFixed(2));\n    }\n  }\n\n  window.addEventListener('message', (e) => {\n    const d = e.data || {};\n    if (d.type === 'state') { state = d.state; render(); }\n    else if (d.type === 'goto') { state.current = d.current; render(); }\n  });\n  window.addEventListener('storage', () => { state = HutbeState.load(); render(); });\n  window.addEventListener('resize', fit);\n  // Projeksiyon penceresinde de tuşlarla ileri/geri\n  window.addEventListener('keydown', (e) => {\n    const src = window.opener || (window.parent !== window ? window.parent : null);\n    if (!src) return;\n    if (['ArrowRight', 'PageDown', ' '].includes(e.key)) src.postMessage({ type: 'nav', step: 1 }, '*');\n    if (['ArrowLeft', 'PageUp'].includes(e.key)) src.postMessage({ type: 'nav', step: -1 }, '*');\n    if (e.key === 'f' || e.key === 'F') document.documentElement.requestFullscreen?.();\n  });\n  document.addEventListener('dblclick', () => document.documentElement.requestFullscreen?.());\n  // Projeksiyon penceresi açıkken ekran kararmasın (önizleme çerçevesinde gerekmez)\n  if (window.parent === window && navigator.wakeLock) {\n    let lock = null;\n    const awake = async () => {\n      if (lock || document.visibilityState !== 'visible') return;\n      try { lock = await navigator.wakeLock.request('screen'); lock.addEventListener('release', () => { lock = null; }); } catch (e) { /* desteklenmiyor */ }\n    };\n    awake();\n    document.addEventListener('visibilitychange', awake);\n    document.addEventListener('click', awake);\n  }\n  if (document.fonts) document.fonts.ready.then(fit);\n  render();\n  const src = window.opener || (window.parent !== window ? window.parent : null);\n  if (src) src.postMessage({ type: 'hello' }, '*');\n})();\n<\/script>\n<\/body>\n<\/html>\n";</script>
 <script>// Cümlelere bölme ve diller arası otomatik eşleme (Gale-Church benzeri uzunluk tabanlı hizalama)
 (function (root) {
   'use strict';
@@ -626,18 +626,21 @@ window.DISPLAY_HTML = "<!doctype html>\n<html lang=\"tr\">\n<head>\n<meta charse
       this.final = [];
       this.interim = [];
       this.startIdx = 0;
+      this.skip = 0; // takip cümlenin ortasından yakalandıysa, cümlenin geçilen kelime sayısı
     }
 
     setSentences(texts, current = 0) {
       this.sentences = texts.map(normalizeWords);
       this.current = current;
       this.startIdx = this.final.length + this.interim.length;
+      this.skip = 0;
     }
 
     // Elle geçişte: dinlenen kısmı sıfırla
     goto(index) {
       this.current = Math.max(0, Math.min(index, this.sentences.length - 1));
       this.startIdx = this.final.length + this.interim.length;
+      this.skip = 0;
       this.onProgress(this.current, 0);
     }
 
@@ -651,10 +654,48 @@ window.DISPLAY_HTML = "<!doctype html>\n<html lang=\"tr\">\n<head>\n<meta charse
       for (let s = 0; s < seg.length && p < words.length; s++) {
         const w = seg[s];
         for (let j = p; j < Math.min(words.length, p + 5); j++) {
+          // İleri atlamak için kısa kelimeler ("ve", "bir", "her") yetmez; yoksa cümle erken biter
+          if (j > p && words[j].length < 4) continue;
           if (similar(w, words[j])) { p = j + 1; matched++; lastMatchAt = s; break; }
         }
       }
       return { p, matched, lastMatchAt };
+    }
+
+    // Takip kaybolursa: son duyulan kelimeler ileriki bir cümleye uyuyor mu?
+    // Önce cümle başlarına, sonra cümle ortalarına bakılır (ses tanıma yeniden başlarken cümlenin başı kaybolabilir).
+    // Kelimeler sırayla ve birkaç hata payıyla aranır. Yanlış sıçramayı önlemek için en az 4-5 kelime gerekir.
+    _resync(seg) {
+      const win = seg.slice(-12);
+      if (win.length < 4) return false;
+      const base = this.startIdx + (seg.length - win.length);
+      const far = seg.length > 2 * (this.sentences[this.current] || []).length + 8; // uzun süredir ilerlenmedi
+      const maxK = far ? 8 : 4;
+      for (let k = 1; k <= maxK; k++) {
+        const nxt = this.sentences[this.current + k];
+        if (!nxt || nxt.length < 4) continue;
+        const head = nxt.slice(0, Math.min(nxt.length, 7));
+        // a) Cümle başı: pencerede her konumdan dene
+        for (let s = 0; s < win.length; s++) {
+          const { p, matched } = this._match(win.slice(s), head);
+          const long = head.slice(0, p).filter((w) => w.length >= 4).length;
+          const need = far && k > 4 ? 5 : 4;
+          if (matched >= need && long >= 3 && matched / p >= 0.7 && similar(win[s], head[0]) || matched >= need + 1 && long >= 4 && matched / p >= 0.7) {
+            return this._advance(k, base + s);
+          }
+        }
+        // b) Cümle ortası: daha sıkı (en az 5 kelime, 4'ü uzun)
+        for (let s = 0; s + 5 <= win.length; s++) {
+          if (win[s].length < 4) continue;
+          for (let o = 1; o + 5 <= nxt.length; o++) {
+            if (nxt[o].length < 4 || !similar(win[s], nxt[o])) continue;
+            const { p, matched } = this._match(win.slice(s), nxt.slice(o));
+            const long = nxt.slice(o, o + p).filter((w) => w.length >= 4).length;
+            if (matched >= 5 && long >= 4 && matched / p >= 0.75) return this._advance(k, base + s, o);
+          }
+        }
+      }
+      return false;
     }
 
     _evaluate() {
@@ -664,21 +705,32 @@ window.DISPLAY_HTML = "<!doctype html>\n<html lang=\"tr\">\n<head>\n<meta charse
       let guard = 0;
       while (guard++ < 5) {
         const seg = stream.slice(this.startIdx);
-        const words = this.sentences[this.current] || [];
-        if (!words.length) { if (!this._advance(1, this.startIdx)) return; continue; }
+        const full = this.sentences[this.current] || [];
+        if (!full.length) { if (!this._advance(1, this.startIdx)) return; continue; }
+        const words = this.skip ? full.slice(this.skip) : full; // cümlenin henüz okunmamış kısmı
         const { p, matched, lastMatchAt } = this._match(seg, words);
-        const progress = p / words.length;
-        this.onProgress(this.current, progress, p);
+        const progress = (this.skip + p) / full.length;
+        this.onProgress(this.current, progress, this.skip + p);
 
         // 1) Cümle sonuna gelindi
         const tail = words.length <= 4 ? 0 : 1;
-        if (p >= words.length - tail && matched / words.length >= 0.5) {
+        // Kısa hitaplar ("Kıymetli Müslümanlar!") söylenirken ekranda görünsün: imam sonraki kelimeye geçince ilerle
+        const shortWait = full.length <= 4 && seg.length - 1 - lastMatchAt < 1;
+        if (p >= words.length - tail && matched / words.length >= 0.5 && !shortWait) {
+          if (this._advance(1, this.startIdx + lastMatchAt + 1)) continue;
+          return;
+        }
+        // 1b) Cümlenin çoğu duyuldu, son kelimeleri yanlış anlaşıldı ama imam devam ediyor:
+        // cümleye uymayan 6 kelime daha geldiyse cümle bitmiştir
+        if (words.length > 4 && matched / words.length >= 0.6 && p >= words.length - 3 && seg.length - 1 - lastMatchAt >= 6) {
           if (this._advance(1, this.startIdx + lastMatchAt + 1)) continue;
           return;
         }
         // 2) İmam bir sonraki cümlelere geçmiş (son duyulan kelimeler sonraki cümlenin başı)
         const jumped = this._lookahead(seg, matched / words.length);
         if (jumped) continue;
+        // 3) Kayıp takibi geri bul
+        if (this._resync(seg)) continue;
         return;
       }
     }
@@ -704,11 +756,12 @@ window.DISPLAY_HTML = "<!doctype html>\n<html lang=\"tr\">\n<head>\n<meta charse
       return false;
     }
 
-    _advance(step, newStart) {
+    _advance(step, newStart, skip = 0) {
       const next = this.current + step;
       if (next >= this.sentences.length) return false;
       this.current = next;
       this.startIdx = newStart;
+      this.skip = skip;
       this.onChange(this.current);
       return true;
     }
@@ -748,8 +801,11 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
       $('#askText').textContent = msg;
       $('#askYes').textContent = yesLabel;
       $('#ask').hidden = false;
-      $('#askYes').focus();
-      const done = (v) => { $('#ask').hidden = true; $('#askYes').onclick = $('#askNo').onclick = null; resolve(v); };
+      // Odak güvenli seçenekte: hutbe sırasında alışkanlıkla basılan Boşluk/Enter bir şeyi silmesin, başa almasın
+      $('#askNo').focus();
+      const esc = (e) => { if (e.key === 'Escape') done(false); };
+      const done = (v) => { $('#ask').hidden = true; $('#askYes').onclick = $('#askNo').onclick = null; window.removeEventListener('keydown', esc); resolve(v); };
+      window.addEventListener('keydown', esc);
       $('#askYes').onclick = () => done(true);
       $('#askNo').onclick = () => done(false);
     });
@@ -846,15 +902,23 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
     sendCurrent();
   }
 
+  // Hutbe ortasında yanlışlıkla başa dönülmesin
+  async function goFirst() {
+    if (state.current > 0 && listening && !(await ask('Hutbe başa alınacak. Emin misiniz?', 'Başa dön'))) return;
+    go(0);
+  }
   $('#btnPrev').onclick = () => go(state.current - 1);
   $('#btnNext').onclick = () => go(state.current + 1);
-  $('#btnFirst').onclick = () => go(0);
+  $('#btnFirst').onclick = goFirst;
+  // Fareyle basılan düğme odakta kalmasın: sonra basılan Enter/Boşluk o düğmeyi (Başa dön, Dinlemeyi durdur) tekrar çalıştırmasın
+  $('.transport').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b && e.detail > 0) b.blur(); });
   window.addEventListener('keydown', (e) => {
     if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName)) return;
     if ($('#tab-live').hidden || !$('#ask').hidden) return;
+    if (e.ctrlKey || e.altKey || e.metaKey) return;
     if (['ArrowRight', 'PageDown', ' '].includes(e.key)) { e.preventDefault(); go(state.current + 1); }
     if (['ArrowLeft', 'PageUp'].includes(e.key)) { e.preventDefault(); go(state.current - 1); }
-    if (e.key === 'b' || e.key === 'B') go(0);
+    if (e.key === 'b' || e.key === 'B') goFirst();
   });
 
   // Tek dosya sürümünde (Hutbe-Ekrani.html) projeksiyon sayfası dosyanın içinde gömülü gelir
@@ -864,10 +928,21 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
   $('#btnOpen').onclick = () => {
     displayWin = window.open(EMBED ? '' : 'display.html', 'hutbe-display', 'popup,width=1280,height=720');
     if (!displayWin) { toast('Projeksiyon penceresi açılamadı. Tarayıcıda bu sayfa için açılır pencerelere izin verin.'); return; }
-    if (EMBED) { displayWin.document.open(); displayWin.document.write(EMBED); displayWin.document.close(); }
+    if (EMBED) writeDisplay();
     setTimeout(broadcast, 500);
     toast('Pencereyi projeksiyona sürükleyin, çift tıklayıp tam ekran yapın.');
   };
+  function writeDisplay() { displayWin.document.open(); displayWin.document.write(EMBED); displayWin.document.close(); }
+  // Tek dosya sürümünde projeksiyon penceresi boş bir sayfaya yazılır; biri orada F5'e basarsa ekran bembeyaz kalır.
+  // Bunu fark edip ekranı yeniden kur.
+  if (EMBED) setInterval(() => {
+    try {
+      if (displayWin && !displayWin.closed && displayWin.document.readyState === 'complete' && !displayWin.document.getElementById('main')) {
+        writeDisplay();
+        setTimeout(broadcast, 300);
+      }
+    } catch (e) { /* pencereye erişilemiyor */ }
+  }, 1500);
 
   function scalePreview() {
     const box = preview.parentElement;
@@ -888,7 +963,7 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
   }
 
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  let rec = null, listening = false;
+  let rec = null, listening = false, failures = 0;
   function setMic(text, st) { $('#micText').textContent = text; $('#micPill').dataset.state = st; }
 
   // Mikrofonu bir kez alıp açık tutar; tanıma yeniden başlarken Chrome'un tekrar izin sormasını azaltır
@@ -910,6 +985,7 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
     // Hata sonrası tanıma kendiliğinden yeniden başlayınca "Ses tanıma hatası" yazısı takılı kalmasın
     rec.onstart = () => { if (listening) setMic('Dinleniyor', 'on'); };
     rec.onresult = (e) => {
+      failures = 0;
       if (listening) setMic('Dinleniyor', 'on');
       let interim = '';
       for (let k = e.resultIndex; k < e.results.length; k++) {
@@ -930,18 +1006,31 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
           : 'Mikrofon izni verilmedi. Adres çubuğundaki mikrofon simgesinden izin verin.');
         return;
       }
-      setMic('Ses tanıma hatası', 'err');
-      toast('Ses tanıma hatası: ' + e.error + (e.error === 'network' ? '. İnternet bağlantısını kontrol edin.' : ''));
+      failures++;
+      if (e.error === 'network') {
+        setMic('İnternet yok, yeniden deneniyor', 'err');
+        if (failures === 1) toast('Ses tanıma için internet gerekiyor. Bağlantı gelince takip kendiliğinden sürer. Bu arada cümleleri → tuşuyla ilerletebilirsiniz.');
+      } else if (e.error === 'audio-capture') {
+        setMic('Mikrofon bulunamadı', 'err');
+        if (failures === 1) toast('Mikrofon bulunamadı. Mikrofonun takılı olduğunu kontrol edin.');
+      } else {
+        setMic('Ses tanıma hatası', 'err');
+        if (failures === 1) toast('Ses tanıma hatası: ' + e.error);
+      }
     };
     rec.onend = () => {
       tracker.resetInterim();
-      if (listening) setTimeout(() => { try { rec.start(); } catch (err) { /* zaten çalışıyor */ } }, 150);
+      // Art arda hata olursa her seferinde biraz daha bekleyerek yeniden dene (en çok 5 sn)
+      if (listening) setTimeout(() => { try { if (listening) rec.start(); } catch (err) { /* zaten çalışıyor */ } }, Math.min(5000, 150 + failures * 700));
     };
+    failures = 0;
     try { rec.start(); } catch (err) { /* yok say */ }
     listening = true;
     syncTracker();
     setMic('Dinleniyor', 'on');
     updateListenBtn();
+    keepAwake();
+    channel?.postMessage({ type: 'listening', from: TAB_ID });
   }
   function stopListening() {
     listening = false;
@@ -949,6 +1038,36 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
     releaseMic();
     setMic('Mikrofon kapalı', 'off');
     updateListenBtn();
+    releaseAwake();
+  }
+
+  // Hutbe sırasında kimse fareye dokunmaz; ekran (ve projeksiyon) kararmasın
+  let wakeLock = null;
+  async function keepAwake() {
+    if (wakeLock || !navigator.wakeLock || document.visibilityState !== 'visible') return;
+    try {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', () => { wakeLock = null; });
+    } catch (e) { /* desteklenmiyor */ }
+  }
+  function releaseAwake() { try { wakeLock?.release(); } catch (e) { /* yok say */ } wakeLock = null; }
+  document.addEventListener('visibilitychange', () => { if (listening && document.visibilityState === 'visible') keepAwake(); });
+
+  // Program iki sekmede açıksa iki ses tanıma birbirini bozar: sadece biri dinlesin
+  const TAB_ID = Math.random().toString(36).slice(2);
+  const channel = window.BroadcastChannel ? new BroadcastChannel('hutbe-ekran') : null;
+  if (channel) {
+    channel.onmessage = (e) => {
+      const d = e.data || {};
+      if (d.from === TAB_ID) return;
+      if (d.type === 'hello') channel.postMessage({ type: 'here', from: TAB_ID });
+      if (d.type === 'here') toast('Program başka bir sekmede ya da pencerede de açık. Karışıklık olmasın diye sadece birini kullanın.');
+      if (d.type === 'listening' && listening) {
+        stopListening();
+        toast('Dinleme başka bir pencerede başladı, bu pencerede durduruldu.');
+      }
+    };
+    if (window.top === window) channel.postMessage({ type: 'hello', from: TAB_ID });
   }
   function updateListenBtn() {
     const b = $('#btnListen');
@@ -971,8 +1090,27 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
     state.rows = h.rows;
     if (h.title) state.title = h.title;
     state.current = 0;
+    state.readyFile = READY[idx].file;
     commit();
     return h;
+  }
+
+  // Siteye bu haftanın hutbesi eklendiyse, tarayıcıda kayıtlı eski hutbede kalınmasın
+  async function offerNewest() {
+    if (!READY.length || !state.rows.length) return;
+    if (!state.readyFile) { // eski sürümden kalan kayıt: hangi hazır hutbe olduğunu metinden bul
+      const first = state.rows[0] && state.rows[0][state.trackLang];
+      const hit = READY.find((h) => h.data.rows[0] && h.data.rows[0][state.trackLang] === first);
+      if (hit) { state.readyFile = hit.file; persist(); }
+    }
+    if (state.readyFile === READY[0].file) return;
+    if (!(await ask(`Yeni hutbe hazır: ${READY[0].date} · ${READY[0].title}. Şu an açık olan hutbenin yerine yüklensin mi?`, 'Yükle'))) {
+      state.readyFile = READY[0].file; persist(); // bir kez sorulur
+      return;
+    }
+    loadReady(0);
+    renderLive();
+    toast('Yeni hutbe yüklendi');
   }
 
   $('#btnReady').onclick = async () => {
@@ -1205,6 +1343,7 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
   syncTracker();
   renderLive();
   scalePreview();
+  offerNewest();
 })();
 </script>
 </body>
