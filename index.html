@@ -134,8 +134,17 @@ kbd { font: 600 12px var(--ui); border: 1px solid var(--line); border-bottom-wid
 .panel-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
 .panel-head > div { display: grid; gap: 4px; max-width: 70ch; }
 .sources { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
-.sources label { display: grid; gap: 6px; font-weight: 600; font-size: 14px; }
-.sources label small { font-weight: 400; color: var(--muted); }
+.src { display: grid; gap: 6px; min-width: 0; border-radius: 10px; }
+.src.drop { outline: 2px dashed var(--teal); outline-offset: 4px; }
+.src-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.src-head > label:first-child { font-weight: 600; font-size: 14px; }
+.src-head small { font-weight: 400; color: var(--muted); }
+.file-btn { font-size: 13px; font-weight: 600; color: var(--teal-ink); border: 1px solid var(--line); background: var(--surface); border-radius: 7px; padding: 3px 10px; cursor: pointer; }
+.file-btn:hover { background: var(--hover); }
+.src:focus-within .file-btn { border-color: var(--teal); }
+.src-msg { font-size: 13px; color: var(--muted); }
+.src-msg[data-kind="ok"] { color: var(--live); }
+.src-msg[data-kind="err"] { color: var(--danger); }
 .sources textarea { min-height: 160px; resize: vertical; font: 14px/1.5 var(--text); padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--fg); }
 textarea[dir=rtl] { font-family: var(--arabic); font-size: 18px; }
 .note { background: var(--cur-bg); border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; font-size: 14px; }
@@ -255,9 +264,12 @@ table.langs .badge { font-size: 11px; font-weight: 600; text-transform: uppercas
       <div class="panel-head">
         <div>
           <h3>Yeni hutbe</h3>
-          <p>Her dilin metnini kendi kutusuna yapıştırın, sonra <b>Otomatik eşle</b>'ye basın. Diyanet'in Word dosyasındaki tarih satırı ve dipnot numaraları kendiliğinden temizlenir.</p>
+          <p>Her dilin Diyanet PDF'ini kendi kutusuna yükleyin. Türkçe ve en az bir çeviri gelince eşleme kendiliğinden yapılır. Metni yapıştırdıysanız <b>Otomatik eşle</b>'ye basın. Tarih satırı, dipnotlar ve Türkçe hutbenin başındaki Arapça ayet kendiliğinden ayıklanır.</p>
         </div>
-        <button id="btnAlign" class="primary">Otomatik eşle</button>
+        <div class="btn-row">
+          <button id="btnClear" class="ghost">Kutuları temizle</button>
+          <button id="btnAlign" class="primary">Otomatik eşle</button>
+        </div>
       </div>
       <div id="sources" class="sources"></div>
     </div>
@@ -781,6 +793,156 @@ window.DISPLAY_HTML = "<!doctype html>\n<html lang=\"tr\">\n<head>\n<meta charse
   else root.HutbeTracker = api;
 })(typeof window !== 'undefined' ? window : globalThis);
 </script>
+<script>// PDF'ten hutbe metni çıkarma (pdf.js ile). Satır sonlarını birleştirir, paragrafları korur.
+(function (root) {
+  'use strict';
+  const PDFJS_URL = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+  const WORKER_URL = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  const ARABIC = /[؀-ۿݐ-ݿﭐ-﷿ﹰ-﻿]/;
+
+  let loading = null;
+  function loadPdfJs() {
+    if (root.pdfjsLib) return Promise.resolve(root.pdfjsLib);
+    if (!loading) {
+      loading = new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = PDFJS_URL;
+        s.onload = () => { root.pdfjsLib.GlobalWorkerOptions.workerSrc = WORKER_URL; resolve(root.pdfjsLib); };
+        s.onerror = () => { loading = null; reject(new Error('PDF okuyucu yüklenemedi. İnternet bağlantısını kontrol edin.')); };
+        document.head.appendChild(s);
+      });
+    }
+    return loading;
+  }
+
+  const ENDS = /[.!?…؟]["”’»)]*$/;
+  const isHeading = (t) => t.length < 60 && /\p{Lu}/u.test(t) && t === t.toLocaleUpperCase('tr') && !/\p{Ll}/u.test(t);
+
+  // Parçaları aradaki boşluğa bakarak birleştir (PDF'lerde kelime arası boşluk çoğu zaman ayrı parça değildir)
+  function joinParts(parts, rtl) {
+    let out = '';
+    let prev = null;
+    for (const p of parts) {
+      if (prev) {
+        const gap = rtl ? prev.x - (p.x + p.w) : p.x - (prev.x + prev.w);
+        if (gap > p.h * 0.12 && !/\s$/.test(out) && !/^\s/.test(p.str)) out += ' ';
+      }
+      out += p.str;
+      prev = p;
+    }
+    return out.replace(/\s+/g, ' ').trim();
+  }
+
+  // Sayfanın sütunlarını bul: soldaki ve sağdaki metin arasında dikey boş şerit varsa iki sütundur
+  function splitColumns(items, width) {
+    const mid = width / 2;
+    const crossing = items.filter((it) => it.x < mid - 4 && it.x + it.w > mid + 4).length;
+    if (crossing > items.length * 0.05) return [items];
+    const left = items.filter((it) => it.x + it.w / 2 < mid);
+    const right = items.filter((it) => it.x + it.w / 2 >= mid);
+    return left.length && right.length ? [left, right] : [items];
+  }
+
+  // pages: [{width, items:[{str, x, y, w, h}]}] -> paragraflar
+  function linesToText(pages, rtlDoc) {
+    const paras = [];
+    for (const page of pages) {
+      let cols = splitColumns(page.items, page.width);
+      if (rtlDoc) cols = cols.reverse(); // Arapça: önce sağ sütun
+      for (const items of cols) linesOfColumn(items, paras);
+    }
+    return paras;
+  }
+
+  function linesOfColumn(items, paras) {
+      // aynı y'deki parçaları satırda topla
+      const lines = [];
+      for (const it of items) {
+        if (!it.str || !it.str.trim()) continue;
+        let ln = lines.find((l) => Math.abs(l.y - it.y) < Math.max(2, it.h * 0.4));
+        if (!ln) { ln = { y: it.y, h: it.h, parts: [] }; lines.push(ln); }
+        ln.parts.push(it);
+      }
+      lines.sort((a, b) => b.y - a.y);
+      for (const l of lines) {
+        const rtl = l.parts.some((p) => ARABIC.test(p.str));
+        l.parts.sort((a, b) => (rtl ? b.x - a.x : a.x - b.x));
+        l.text = joinParts(l.parts, rtl);
+      }
+      const gaps = [];
+      for (let i = 1; i < lines.length; i++) gaps.push(lines[i - 1].y - lines[i].y);
+      const typical = gaps.length ? gaps.slice().sort((a, b) => a - b)[Math.floor(gaps.length / 2)] : 0;
+      let cur = '';
+      lines.forEach((l, i) => {
+        const prev = lines[i - 1];
+        const gap = prev ? prev.y - l.y : 0;
+        const breakHere = !prev || !cur || gap > typical * 1.5 || ENDS.test(cur) || isHeading(cur) || isHeading(l.text);
+        if (breakHere) { if (cur) paras.push(cur); cur = l.text; }
+        else cur = cur.endsWith('-') ? cur.slice(0, -1) + l.text : cur + ' ' + l.text;
+      });
+      if (cur) paras.push(cur);
+  }
+
+  // Sütun ya da sayfa değişince yarıda kalan cümleyi sonraki paragrafla birleştir
+  function mergeBroken(paras) {
+    const out = [];
+    for (const p of paras) {
+      const last = out[out.length - 1];
+      if (last && !ENDS.test(last) && !isHeading(last) && /^\p{Ll}/u.test(p)) out[out.length - 1] = last + ' ' + p;
+      else out.push(p);
+    }
+    return out;
+  }
+
+  const FOOTER = /Din Hizmetleri Genel Müdürlüğü|General Directorate of Religious Services|المديرية العامة للخدمات الدينية/;
+  // Dipnot satırı: "1 Ebû Dâvûd, Edeb, 60." / "5Nahl, 16/97." gibi kısa kaynak satırları
+  const FOOTNOTE = /^[\d١-٩]{1,2}\s*\S.{0,120}$/;
+  const SOURCE = /[,،]\s*\S|\d+\/\d+|\d+\.$/;
+
+  // Sağdan sola olmayan dillerde Arapça satırları (Türkçe hutbenin başındaki ayet/hadis), dipnotları ve alt bilgiyi ayıkla
+  function tidy(paras, rtl) {
+    return paras
+      .map((p) => p.replace(FOOTER, '').trim())
+      .filter((p) => p && (rtl || !ARABIC.test(p)))
+      .filter((p) => !(FOOTNOTE.test(p) && SOURCE.test(p)))
+      // numarası üst simge olduğu için düşmüş kaynak satırları: "Mâide, 5/32." / "Ebû Dâvûd, Edeb, 60."
+      .filter((p) => !(p.length < 80 && /(\d+\/\d+|[,،]\s*\d+)\.?$/.test(p) && !/[!?]/.test(p)))
+      .join('\n');
+  }
+
+  // Diyanet'in Arapça PDF'lerinde yazı tipi yüzünden harekeler karışık çıkar:
+  // "fetha+şedde" dizisi neredeyse her kelimede görünür (düzgün metinde kelime başına ~0.03, bozukta ~0.85)
+  function looksBroken(text) {
+    const words = text.split(/\s+/).filter((w) => ARABIC.test(w)).length;
+    if (words < 20) return false;
+    return (text.match(/َّ/g) || []).length / words > 0.3;
+  }
+
+  async function extract(arrayBuffer, rtl, lib) {
+    lib = lib || (await loadPdfJs());
+    const doc = await lib.getDocument({ data: new Uint8Array(arrayBuffer), disableFontFace: true, isEvalSupported: false }).promise;
+    const pages = [];
+    for (let i = 1; i <= doc.numPages; i++) {
+      const page = await doc.getPage(i);
+      const tc = await page.getTextContent();
+      pages.push({
+        width: page.getViewport({ scale: 1 }).width,
+        items: tc.items.filter((it) => it.str).map((it) => ({ str: it.str, x: it.transform[4], y: it.transform[5], w: it.width || 0, h: Math.abs(it.transform[3]) || it.height || 10 })),
+      });
+    }
+    // Üst simge dipnot numaralarını (metindeki küçük "1", "2"...) at
+    const hs = pages.flatMap((p) => p.items.map((it) => it.h)).sort((a, b) => a - b);
+    const medH = hs[Math.floor(hs.length / 2)] || 10;
+    pages.forEach((p) => { p.items = p.items.filter((it) => !(/^\s*[\d١-٩]{1,2}\s*$/.test(it.str) && it.h < medH * 0.8)); });
+    const text = tidy(mergeBroken(linesToText(pages, rtl)), rtl);
+    return { text, broken: rtl && looksBroken(text) };
+  }
+
+  const api = { extract, linesToText, tidy, looksBroken };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  else root.HutbePdf = api;
+})(typeof window !== 'undefined' ? window : globalThis);
+</script>
 <script>// Otomatik üretildi: node tools/build-hutbeler.js
 window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","title":"İbadet","data":{"title":"Cuma Hutbesi – İbadet (06.11.2026)","trackLang":"tr","sources":{"tr":"İBADET\nMuhterem Müslümanlar!\nCenâb-ı Hakk’a olan bağlılığımızın en somut göstergesi ibadetlerimizdir. İbadetler; yaratılış gayemizdir, imanımızın hayata yansımasıdır. Rabbimizin bize sunduğu nimetlere karşı şükrümüzün gereği, O’nun sonsuz rahmetine ulaşma arzumuzdur. İhlasla eda ettiğimiz her ibadet; dilimizin zikirle buluşmasına, hayatımızın mutlulukla dolmasına vesiledir.\nAziz Müminler!\nRabbimizin farz kıldığı, şekli ve vakti belli ibadetler, dinimizin direği ve kulluğumuzun özüdür. Namaz bizleri; hayâsızlıktan ve kötülükten uzak tutar, günahlardan temizler, gönlümüzü huzura erdirir. Oruç; takvayı, sabrı, muhtacın derdiyle dertlenmeyi bizlere öğretir. Zekât, malımızı ve servetimizi maddi ve manevi kirlerden arındırırken bizleri de cimrilik hastalığından korur. Hac ise kötü sözlerden, kavgadan ve öfkeden uzak kalmayı, bütün insanların Allah katında bir tarağın dişleri gibi eşit olduğunu bizlere hatırlatır. \nKıymetli Müslümanlar!\nAllah’ın rızasını gözeterek yaptığımız her iyilik ve her hayırlı iş aynı zamanda bir ibadettir. Nitekim kendimizin ve ailemizin rızkını helal yollardan kazanmak, alışverişte dürüst olmak, çalışıp üretmek ibadettir. Ailemiz, akrabamız ve komşularımızla bağımızı güçlü tutmak, onlarla ilgilenmek, onların sevinçlerini ve kederlerini paylaşmak ibadettir. Engelli bir kardeşimizin hayatını kolaylaştırmak, ihtiyaç sahibi bir öğrencinin eğitimine destek olmak, geçim sıkıntısı çeken bir komşumuzun yardımına koşmak ibadettir. Rahmet Elçisi (s.a.s)’in, “Kul, kardeşinin yardımında olduğu sürece, Allah da o kulun yardımcısıdır” muştusuna nail olabilmek ne büyük saadettir.\nDeğerli Müminler!\nYeri geldiğinde yüzümüzde beliren bir tebessüm, yeri geldiğinde insanlara eziyet veren engelleri kaldırmak, yeri geldiğinde ise mazlum ve mağdurlara el uzatmak bir sadakadır ve her sadaka bir ibadettir. Kimi zaman bir hastaya kan vererek can olmak, kimi zaman da çaresizce bekleyen bir kardeşimiz için dini ve tıbbi hassasiyetleri dikkate alarak organ bağışında bulunmak bir iyiliktir ve her iyilik bir ibadettir. Ayet-i kerime gayet açıktır: “…Kim, bir insanın hayatını kurtarırsa bütün insanların hayatını kurtarmış gibi olur…” \nAziz Kardeşlerim!\nÖmrümüz kısa, dünya geçici, ahiret hayatı ise haktır, gerçektir ve ebedidir. Gün gelir; nefesimiz biter, adımlarımız durur, dünyaya ait olan ne varsa geride bırakır gideriz. Evet, Değerli Kardeşlerim! Asıl mesele, dünyada ne kadar kaldığımız değil, Allah’a olan kulluğumuz ve O’nun rızası için yaptığımız iyiliklerimizdir. Asıl mesele, Sevgili Peygamberimiz (s.a.s)’in, “…Allah katında amellerin en sevimlisi, az da olsa devamlı olanıdır” tavsiyesine uyarak ömrümüzü ibadete çevirebilmektir.\nHutbemizi, Nahl sûresi doksan yedinci ayet-i kerimenin mealiyle bitiriyoruz: “Erkek ya da kadın, kim mümin olarak salih amel işlerse, elbette ona hoş bir hayat yaşatacağız ve onların mükâfatlarını yaptıklarına karşılık olarak en güzeliyle vereceğiz.”","ar":"الْعِبَادَةُ\nأَيُّهَا الْمُسْلِمُونَ الْأَفَاضِلُ!\nإِنَّ عِبَادَاتِنَا هِيَ أَبْرَزُ مَظَاهِرِ ارْتِبَاطِنَا وَتَعَلُّقِنَا بِاللَّهِ سُبْحَانَهُ وَتَعَالَى. فَالْعِبَادَاتُ هِيَ الْغَايَةُ مِنْ وُجُودِنَا عَلَى الأَرْضِ، وَهِيَ إِنْعِكَاسٌ لِإِيمَانِنَا فِي حَيَاتِنَا. وَهِيَ مُقْتَضَى شُكْرِنَا لِرَبِّنَا عَلَى مَا أَنْعَمَ بِهِ عَلَيْنَا مِنْ نِعَمٍ، وَتَعْبِيرٌ عَنْ رَغْبَتِنَا فِي نَيْلِ رَحْمَتِهِ اللَّامُتَنَاهِيَةِ. وَكُلُّ عِبَادَةٍ نُؤَدِّيهَا بِإِخْلَاصٍ تَكُونُ سَبَبًا فِي أَنْ تَلْهَجَ أَلْسِنَتُنَا بِذِكْرِ اللَّهِ، وَأَنْ تَمْتَلِئَ حَيَاتُنَا بِالسَّعَادَةِ.\nأَيُّهَا الْمُسْلِمُونَ الْأَعِزَّاءُ!\nإِنَّ الْعِبَادَاتِ الَّتِي فَرَضَهَا عَلَيْنَا رَبُّنَا سُبْحَانَهُ وَتَعَالَى، وَحَدَّدَ كَيْفِيَّةَ أَدَائِهَا وَأَوْقَاتَهَا، هِيَ عِمَادُ دِينِنَا وَجَوْهَرُ عُبُودِيَّتِنَا لِلَّهِ تَعَالَى. فَالصَّلَاةُ تَنْهَانَا عَنِ الْفَحْشَاءِ وَالْمُنْكَرِ، وَتُطَهِّرُنَا مِنَ الذُّنُوبِ، وَتَبْعَثُ الطُّمَأْنِينَةَ فِي قُلُوبِنَا. وَالصِّيَامُ يُعَلِّمُنَا التَّقْوَى وَالصَّبْرَ وَمُشَارَكَةَ الْمُحْتَاجِينَ في هُمُومِهِمْ. وَالزَّكَاةُ تُطَهِّرُ أَمْوَالَنَا وَثَرَوَاتِنَا مِنَ الْأَدْرَانِ الْمَادِّيَّةِ وَالْمَعْنَوِيَّةِ، وَتُجَنِّبُنَا عَنْ مَرَضِ الْبُخْلِ. أَمَّا الْحَجُّ فَيُذَكِّرُنَا بِضَرُورَةِ الِابْتِعَادِ عَنِ الْكَلَامِ السَّيِّئِ وَالْخِصَامِ وَالْغَضَبِ، وَبِأَنَّ النَّاسَ جَمِيعًا مُتَسَاوُونَ عِنْدَ اللَّهِ كَأَسْنَانِ الْمُشْطِ. \nأَيُّهَا الْمُسْلِمُونَ الْكِرَامُ!\nإِنَّ كُلَّ خَيْرٍ وَعَمَلٍ صَالِحٍ نَفْعَلُهُ ابْتِغَاءَ مَرْضَاةِ اللَّهِ عِبَادَةٌ فِي الْوَقْتِ نَفْسِهِ. فَالْعَمَلُ عَلَى كَسْبِ رِزْقِنَا وَرِزْقِ أُسْرَتِنَا مِنْ طُرُقٍ حَلَالٍ، وَالصِّدْقُ فِي الْبَيْعِ وَالشِّرَاءِ، وَالْعَمَلُ وَالْإِنْتَاجُ، كُلُّ ذَلِكَ عِبَادَةٌ. وَتَوْثِيقُ صِلَتِنَا بِأُسْرَتِنَا وَأَقَارِبِنَا وَجِيرَانِنَا، وَالِاهْتِمَامُ بِهِمْ، وَمُشَارَكَتُهُمْ في أَفْرَاحِهِمْ وَأَحْزَانِهِمْ، عِبَادَةٌ. وَتَيْسِيرُ حَيَاةِ أَحَدِ إِخْوَانِنَا مِنْ ذَوِي المُعَاقِين، وَدَعْمُ طَالِبٍ مُحْتَاجٍ فِي تَعْلِيمِهِ، وَالْمُسَارَعَةُ إِلَى اعانة جَارٍ يُعَانِي ضِيقَ الْعَيْشِ، كُلُّ ذَلِكَ عِبَادَةٌ. وَقَدْ بَشَّرَنَا رَسُولُ الرَّحْمَةِ ﷺ بِقَوْلِهِ: \"وَاللَّهُ فِي عَوْنِ الْعَبْدِ مَا كَانَ الْعَبْدُ فِي عَوْنِ أَخِيهِ.\" فَمَا أَعْظَمَ السَّعَادَةَ فِي أَنْ نَنَالَ هَذِهِ الْبُشْرَى.\nأَيُّهَا الْمُؤْمِنُونَ الْأَفَاضِلُ!\nقَدْ تَكُونُ الِابْتِسَامَةُ الَّتِي تَرْتَسِمُ عَلَى وُجُوهِنَا صَدَقَةً، وَقَدْ تَكُونُ إِمَاطَةُ مَا يُؤْذِي النَّاسَ عَنْ طَرِيقِهِمْ صَدَقَةً، وَقَدْ يَكُونُ مَدُّ يَدِ الْعَوْنِ إِلَى الْمَظْلُومِينَ وَالْمُتَضَرِّرِينَ صَدَقَةً، وَكُلُّ صَدَقَةٍ عِبَادَةٌ. وَقَدْ يَكُونُ التَّبَرُّعُ بِالدَّمِ لِإِنْقَاذِ حَيَاةِ مَرِيضٍ، أَوِ التَّبَرُّعُ بِالْأَعْضَاءِ لِأَخٍ لَنَا يَنْتَظِرُ الْعَوْنَ وَلَا حِيلَةَ لَهُ دون ذلك، مَعَ مُرَاعَاةِ الِاعْتِبَارَاتِ الدِّينِيَّةِ وَالطِّبِّيَّةِ، عَمَلًا مِنْ أَعْمَالِ الْخَيْرِ، وَكُلُّ عَمَلٍ مِنْ أَعْمَالِ الْخَيْرِ عِبَادَةٌ. وَالْآيَةُ الْكَرِيمَةُ وَاضِحَةٌ جَلِيَّةٌ فِي هَذَا الشَّأْنِ، حَيْثُ قَالَ اللَّهُ تَعَالَى: \"وَمَنْ أَحْيَاهَا فَكَأَنَّمَا أَحْيَا النَّاسَ جَمِيعًا.\"\nأَيُّهَا الْمُؤْمِنُونَ الْأَعِزَّاءُ!\nإِنَّ أَعْمَارَنَا قَصِيرَةٌ، وَالدُّنْيَا فَانِيَةٌ، أَمَّا حَيَاةُ الْآخِرَةِ فَهِيَ حَقٌّ لَا رَيْبَ فِيهِ، وَأَبَدِيَّةٌ. وَسَيَأْتِي يَوْمٌ تَنْقَطِعُ فِيهِ أَنْفَاسُنَا، وَتَتَوَقَّفُ فِيهِ خُطَانَا، وَسَنَرْحَلُ عَنْ هَذِهِ الدُّنْيَا تَارِكِينَ وَرَاءَنَا كُلَّ مَا فِيهَا. نَعَمْ، أَيُّهَا الْإِخْوَةُ الْكِرَامُ! إِنَّ الْعِبْرَةَ لَيْسَتْ بِطُولِ مُكْثِنَا فِي الدُّنْيَا، وَإِنَّمَا بِعُبُودِيَّتِنَا لِلَّهِ تَعَالَى، وَبِمَا نَقُومُ بِهِ مِنْ أَعْمَالِ الْخَيْرِ ابْتِغَاءَ مَرْضَاتِهِ. وَالْأَهَمُّ مِنْ ذَلِكَ أَنْ نَجْعَلَ حَيَاتَنَا كُلَّهَا عِبَادَةً، عَمَلًا بِوَصِيَّةِ نَبِيِّنَا الْحَبِيبِ ﷺ الَّذِي قَالَ: \"وَإِنَّ أَحَبَّ الْعَمَلِ إِلَى اللَّهِ أَدْوَمُهُ وَإِنْ قَلَّ\".4\nوَنَخْتَتِمُ خُطْبَتَنَا بِقَوْلِ اللَّهِ تَعَالَى فِي الْآيَةِ السَّابِعَةِ وَالتِّسْعِينَ مِنْ سُورَةِ النَّحْلِ: \"مَنْ عَمِلَ صَالِحًا مِنْ ذَكَرٍ أَوْ أُنْثَى وَهُوَ مُؤْمِنٌ فَلَنُحْيِيَنَّهُ حَيَاةً طَيِّبَةً وَلَنَجْزِيَنَّهُمْ أَجْرَهُمْ بِأَحْسَنِ مَا كَانُوا يَعْمَلُونَ\".5","en":"WORSHIP\nEsteemed Muslims!\nOur acts of worship are the most tangible manifestations of our devotion to Allah the Almighty. Worship is the very purpose of our creation and the reflection of our faith in our lives. It is an expression of our gratitude for the blessings bestowed upon us by our Lord and our longing to attain His infinite mercy. Every act of worship we perform with sincerity brings our tongues to the remembrance of Allah and fills our lives with happiness.\nDear Believers!\nThe acts of worship prescribed as obligatory by our Lord, with their prescribed forms and times, are the pillars of our religion and the essence of our servitude to Him. Prayer keeps us away from indecency and evil, purifies us of our sins, and brings peace to our hearts. Fasting teaches us taqwa, patience, and compassion for those in need. Zakat purifies our wealth and possessions of material and spiritual impurities while protecting us from the vice of miserliness. Hajj reminds us to refrain from foul language, quarrels, and anger, and that all people are equal in the sight of Allah, like the teeth of a comb. \nEsteemed Muslims!\nEvery good deed and righteous act we perform seeking the pleasure of Allah is also an act of worship. Indeed, earning a halal livelihood for ourselves and our families, being honest in our business dealings, and working and producing are all acts of worship. Maintaining strong ties with our families, relatives, and neighbors, caring for them, and sharing in their joys and sorrows are acts of worship. Making life easier for a brother or sister with a disability, supporting the education of a student in need, and extending a helping hand to a neighbor facing financial hardship are acts of worship. What a great blessing it is to receive the glad tidings of the Messenger of Mercy (saw): “Allah continues to help His servant as long as the servant helps his brother.”\nHonorable Believers!\nA smile on our faces, removing obstacles that cause harm to others, or extending a helping hand to the oppressed and those who have suffered injustice are all forms of sadaqah, and every act of sadaqah is an act of worship. Whether it is saving a life by donating blood to a patient or donating an organ to a brother or sister desperately awaiting help, while taking religious and medical considerations into account, these are acts of goodness, and every good deed is an act of worship. The following verse of the Qur’an clearly states: “…Whoever saves a life, it will be as if they saved all of humanity…” \nDear Brothers and Sisters!\nOur lives are short, this world is temporary, and the Hereafter is certain, real, and eternal. A day will come when we take our last breath, our footsteps come to a halt, and we depart this world, leaving behind everything that belongs to it. Indeed, Dear Brothers and Sisters! What truly matters is not how long we remain in this world, but our devotion to Allah and the good deeds we perform seeking His pleasure. What truly matters is turning our entire lives into acts of worship by following the advice of our beloved Prophet (saw): “…The deeds most beloved to Allah are those performed consistently, even if they are few.”\nWe conclude this week’s khutbah with the meaning of verse 97 of Surah An-Nahl: “Whoever does good, whether male or female, and is a believer, We will surely bless them with a good life, and We will certainly reward them according to the best of their deeds.”","mn":"ИБАДАТ\nЭрхэм хүндэт мусульманчууд аа!\nИх Эзэн Аллахад үнэнч байдгийн маань хамгийн тод илрэл бол бидний ибадат мөргөл юм.\nИбадат бол бидний бүтээгдсэн зорилго, бидний итгэл амьдралд тусгагдсан хэлбэр юм.\nЭнэ нь Эзэний маань бидэнд хайрласан ач ивээлд талархах бидний үүрэг бөгөөд Түүний хязгааргүй нигүүлсэлд хүрэх бидний хүсэл юм.\nЧин сэтгэлээр үйлдсэн ибадат бүр бидний хэлийг Аллахыг дурсахад хүргэж, амьдралыг маань аз жаргалаар дүүргэх шалтгаан болдог.\nХүндэт итгэгчид ээ!\nЭзэний маань фарз болгосон, хэлбэр болон цаг хугацаа нь тогтоогдсон ибадатууд бол бидний шашны тулгуур багана, Түүнд зүтгэх бидний боолчлолын мөн чанар юм.\nНамаз биднийг ичгүүргүй, муу үйлсээс хол байлгаж, нүглээс ариусгаж, зүрх сэтгэлийг маань амар тайван болгодог.\nМацаг барих нь бидэнд такваа, тэвчээр, гачигдалтай хүмүүсийн зовлонг хуваалцахыг сургадаг.\nЗакат бидний эд хөрөнгийг материаллаг болон оюун санааны бузраас ариусгахын зэрэгцээ биднийг харамч занаас хамгаалдаг.\nХаж мөргөл харин муу үг, хэрүүл маргаан, уур хилэнгээс хол байх, бүх хүн Аллахын өмнө самны шүд адил тэгш гэдгийг бидэнд сануулдаг.\nЭрхэм мусульманчууд аа!\nАллахын таалалд нийцүүлэн хийсэн сайн үйлс, буянтай ажил бүр мөн ибадат юм.\nТухайлбал, өөрийн болон гэр бүлийнхээ хүнсийг халал замаар олох, худалдаа наймаандаа шударга байх, хөдөлмөрлөж бүтээх нь ибадат юм.\nГэр бүл, төрөл садан, хөршүүдтэйгээ холбоогоо бат бөх байлгах, тэдэнд анхаарал тавих, баяр баясгалан, уй гашууг нь хуваалцах нь ибадат юм.\nХөгжлийн бэрхшээлтэй ах дүүгийнхээ амьдралыг хөнгөвчлөх, тусламж хэрэгтэй сурагчийн боловсролд дэмжлэг үзүүлэх, амьжиргааны хүндрэлтэй хөршдөө туслахаар яарах нь ибадат юм.\nНигүүлслийн Элч (с.а.с)-ийн \"Боол ах дүүдээ тусалж байх хугацаанд Аллах ч мөн тэр боолд туслагч байна\" гэсэн сайн мэдээнд хүртэх нь ямар их аз жаргал вэ!\nХүндэт итгэгчид ээ!\nХэрэгтэй үед нүүрэндээ тодруулсан инээмсэглэл, хүмүүст саад болох зүйлийг замаас зайлуулах, хэлмэгдэгсэд болон хохирогчдод тусламжийн гар сунгах нь садака бөгөөд садака бүр ибадат юм.\nЗаримдаа өвчтөнд цусаа өгч амийг нь аврах, заримдаа найдвар тасран хүлээж буй ах дүүдээ шашны болон анагаах ухааны шаардлагыг харгалзан эрхтэнээ хандивлах нь сайн үйл бөгөөд сайн үйл бүр ибадат юм.\nАриун айат үүнийг тодорхой хэлдэг: \"...Хэн нэгэн хүний амийг аварвал бүх хүн төрөлхтний амийг аварсантай адил болно...\"\nЭрхэм ах дүү нар аа!\nБидний нас богино, энэ дэлхий түр зуурынх, харин хойд насны амьдрал бол үнэн, бодит бөгөөд мөнхийн юм.\nНэг өдөр амьсгал маань тасарч, алхам маань зогсож, энэ дэлхийд хамаарах бүхнийг ардаа орхин явах болно.\nТийм ээ, эрхэм ах дүү нар аа!\nГол асуудал бол энэ дэлхийд хэр удаан амьдарсан нь бус, харин Аллахад зүтгэсэн бидний боолчлол болон Түүний таалалын төлөө хийсэн сайн үйлс маань юм.\nГол асуудал бол хайрт Бошиглогч (с.а.с)-ийн \"...Аллахын өмнө хамгийн хайртай үйлс бол бага ч гэсэн тогтмол хийгддэг нь юм\" гэсэн зөвлөгөөг дагаж, амьдралаа ибадат болгон хувиргах явдал юм.\nХутбаагаа бид Нахл судрын ерэн долдугаар айатын утгаар төгсгөж байна: \"Эрэгтэй ч бай, эмэгтэй ч бай, итгэгч байхдаа сайн үйл хийсэн хэнд ч Бид сайхан амьдрал заяах бөгөөд тэдний шагналыг хийсэн үйлсийнх нь хамгийн сайнаар нь өгөх болно.\""},"rows":[{"tr":"İBADET","ar":"الْعِبَادَةُ","en":"WORSHIP","mn":"ИБАДАТ"},{"tr":"Muhterem Müslümanlar!","ar":"أَيُّهَا الْمُسْلِمُونَ الْأَفَاضِلُ!","en":"Esteemed Muslims!","mn":"Эрхэм хүндэт мусульманчууд аа!"},{"tr":"Cenâb-ı Hakk’a olan bağlılığımızın en somut göstergesi ibadetlerimizdir.","ar":"إِنَّ عِبَادَاتِنَا هِيَ أَبْرَزُ مَظَاهِرِ ارْتِبَاطِنَا وَتَعَلُّقِنَا بِاللَّهِ سُبْحَانَهُ وَتَعَالَى.","en":"Our acts of worship are the most tangible manifestations of our devotion to Allah the Almighty.","mn":"Их Эзэн Аллахад үнэнч байдгийн маань хамгийн тод илрэл бол бидний ибадат мөргөл юм."},{"tr":"İbadetler; yaratılış gayemizdir, imanımızın hayata yansımasıdır.","ar":"فَالْعِبَادَاتُ هِيَ الْغَايَةُ مِنْ وُجُودِنَا عَلَى الأَرْضِ، وَهِيَ إِنْعِكَاسٌ لِإِيمَانِنَا فِي حَيَاتِنَا.","en":"Worship is the very purpose of our creation and the reflection of our faith in our lives.","mn":"Ибадат бол бидний бүтээгдсэн зорилго, бидний итгэл амьдралд тусгагдсан хэлбэр юм."},{"tr":"Rabbimizin bize sunduğu nimetlere karşı şükrümüzün gereği, O’nun sonsuz rahmetine ulaşma arzumuzdur.","ar":"وَهِيَ مُقْتَضَى شُكْرِنَا لِرَبِّنَا عَلَى مَا أَنْعَمَ بِهِ عَلَيْنَا مِنْ نِعَمٍ، وَتَعْبِيرٌ عَنْ رَغْبَتِنَا فِي نَيْلِ رَحْمَتِهِ اللَّامُتَنَاهِيَةِ.","en":"It is an expression of our gratitude for the blessings bestowed upon us by our Lord and our longing to attain His infinite mercy.","mn":"Энэ нь Эзэний маань бидэнд хайрласан ач ивээлд талархах бидний үүрэг бөгөөд Түүний хязгааргүй нигүүлсэлд хүрэх бидний хүсэл юм."},{"tr":"İhlasla eda ettiğimiz her ibadet; dilimizin zikirle buluşmasına, hayatımızın mutlulukla dolmasına vesiledir.","ar":"وَكُلُّ عِبَادَةٍ نُؤَدِّيهَا بِإِخْلَاصٍ تَكُونُ سَبَبًا فِي أَنْ تَلْهَجَ أَلْسِنَتُنَا بِذِكْرِ اللَّهِ، وَأَنْ تَمْتَلِئَ حَيَاتُنَا بِالسَّعَادَةِ.","en":"Every act of worship we perform with sincerity brings our tongues to the remembrance of Allah and fills our lives with happiness.","mn":"Чин сэтгэлээр үйлдсэн ибадат бүр бидний хэлийг Аллахыг дурсахад хүргэж, амьдралыг маань аз жаргалаар дүүргэх шалтгаан болдог."},{"tr":"Aziz Müminler!","ar":"أَيُّهَا الْمُسْلِمُونَ الْأَعِزَّاءُ!","en":"Dear Believers!","mn":"Хүндэт итгэгчид ээ!"},{"tr":"Rabbimizin farz kıldığı, şekli ve vakti belli ibadetler, dinimizin direği ve kulluğumuzun özüdür.","ar":"إِنَّ الْعِبَادَاتِ الَّتِي فَرَضَهَا عَلَيْنَا رَبُّنَا سُبْحَانَهُ وَتَعَالَى، وَحَدَّدَ كَيْفِيَّةَ أَدَائِهَا وَأَوْقَاتَهَا، هِيَ عِمَادُ دِينِنَا وَجَوْهَرُ عُبُودِيَّتِنَا لِلَّهِ تَعَالَى.","en":"The acts of worship prescribed as obligatory by our Lord, with their prescribed forms and times, are the pillars of our religion and the essence of our servitude to Him.","mn":"Эзэний маань фарз болгосон, хэлбэр болон цаг хугацаа нь тогтоогдсон ибадатууд бол бидний шашны тулгуур багана, Түүнд зүтгэх бидний боолчлолын мөн чанар юм."},{"tr":"Namaz bizleri; hayâsızlıktan ve kötülükten uzak tutar, günahlardan temizler, gönlümüzü huzura erdirir.","ar":"فَالصَّلَاةُ تَنْهَانَا عَنِ الْفَحْشَاءِ وَالْمُنْكَرِ، وَتُطَهِّرُنَا مِنَ الذُّنُوبِ، وَتَبْعَثُ الطُّمَأْنِينَةَ فِي قُلُوبِنَا.","en":"Prayer keeps us away from indecency and evil, purifies us of our sins, and brings peace to our hearts.","mn":"Намаз биднийг ичгүүргүй, муу үйлсээс хол байлгаж, нүглээс ариусгаж, зүрх сэтгэлийг маань амар тайван болгодог."},{"tr":"Oruç; takvayı, sabrı, muhtacın derdiyle dertlenmeyi bizlere öğretir.","ar":"وَالصِّيَامُ يُعَلِّمُنَا التَّقْوَى وَالصَّبْرَ وَمُشَارَكَةَ الْمُحْتَاجِينَ في هُمُومِهِمْ.","en":"Fasting teaches us taqwa, patience, and compassion for those in need.","mn":"Мацаг барих нь бидэнд такваа, тэвчээр, гачигдалтай хүмүүсийн зовлонг хуваалцахыг сургадаг."},{"tr":"Zekât, malımızı ve servetimizi maddi ve manevi kirlerden arındırırken bizleri de cimrilik hastalığından korur.","ar":"وَالزَّكَاةُ تُطَهِّرُ أَمْوَالَنَا وَثَرَوَاتِنَا مِنَ الْأَدْرَانِ الْمَادِّيَّةِ وَالْمَعْنَوِيَّةِ، وَتُجَنِّبُنَا عَنْ مَرَضِ الْبُخْلِ.","en":"Zakat purifies our wealth and possessions of material and spiritual impurities while protecting us from the vice of miserliness.","mn":"Закат бидний эд хөрөнгийг материаллаг болон оюун санааны бузраас ариусгахын зэрэгцээ биднийг харамч занаас хамгаалдаг."},{"tr":"Hac ise kötü sözlerden, kavgadan ve öfkeden uzak kalmayı, bütün insanların Allah katında bir tarağın dişleri gibi eşit olduğunu bizlere hatırlatır.","ar":"أَمَّا الْحَجُّ فَيُذَكِّرُنَا بِضَرُورَةِ الِابْتِعَادِ عَنِ الْكَلَامِ السَّيِّئِ وَالْخِصَامِ وَالْغَضَبِ، وَبِأَنَّ النَّاسَ جَمِيعًا مُتَسَاوُونَ عِنْدَ اللَّهِ كَأَسْنَانِ الْمُشْطِ.","en":"Hajj reminds us to refrain from foul language, quarrels, and anger, and that all people are equal in the sight of Allah, like the teeth of a comb.","mn":"Хаж мөргөл харин муу үг, хэрүүл маргаан, уур хилэнгээс хол байх, бүх хүн Аллахын өмнө самны шүд адил тэгш гэдгийг бидэнд сануулдаг."},{"tr":"Kıymetli Müslümanlar!","ar":"أَيُّهَا الْمُسْلِمُونَ الْكِرَامُ!","en":"Esteemed Muslims!","mn":"Эрхэм мусульманчууд аа!"},{"tr":"Allah’ın rızasını gözeterek yaptığımız her iyilik ve her hayırlı iş aynı zamanda bir ibadettir.","ar":"إِنَّ كُلَّ خَيْرٍ وَعَمَلٍ صَالِحٍ نَفْعَلُهُ ابْتِغَاءَ مَرْضَاةِ اللَّهِ عِبَادَةٌ فِي الْوَقْتِ نَفْسِهِ.","en":"Every good deed and righteous act we perform seeking the pleasure of Allah is also an act of worship.","mn":"Аллахын таалалд нийцүүлэн хийсэн сайн үйлс, буянтай ажил бүр мөн ибадат юм."},{"tr":"Nitekim kendimizin ve ailemizin rızkını helal yollardan kazanmak, alışverişte dürüst olmak, çalışıp üretmek ibadettir.","ar":"فَالْعَمَلُ عَلَى كَسْبِ رِزْقِنَا وَرِزْقِ أُسْرَتِنَا مِنْ طُرُقٍ حَلَالٍ، وَالصِّدْقُ فِي الْبَيْعِ وَالشِّرَاءِ، وَالْعَمَلُ وَالْإِنْتَاجُ، كُلُّ ذَلِكَ عِبَادَةٌ.","en":"Indeed, earning a halal livelihood for ourselves and our families, being honest in our business dealings, and working and producing are all acts of worship.","mn":"Тухайлбал, өөрийн болон гэр бүлийнхээ хүнсийг халал замаар олох, худалдаа наймаандаа шударга байх, хөдөлмөрлөж бүтээх нь ибадат юм."},{"tr":"Ailemiz, akrabamız ve komşularımızla bağımızı güçlü tutmak, onlarla ilgilenmek, onların sevinçlerini ve kederlerini paylaşmak ibadettir.","ar":"وَتَوْثِيقُ صِلَتِنَا بِأُسْرَتِنَا وَأَقَارِبِنَا وَجِيرَانِنَا، وَالِاهْتِمَامُ بِهِمْ، وَمُشَارَكَتُهُمْ في أَفْرَاحِهِمْ وَأَحْزَانِهِمْ، عِبَادَةٌ.","en":"Maintaining strong ties with our families, relatives, and neighbors, caring for them, and sharing in their joys and sorrows are acts of worship.","mn":"Гэр бүл, төрөл садан, хөршүүдтэйгээ холбоогоо бат бөх байлгах, тэдэнд анхаарал тавих, баяр баясгалан, уй гашууг нь хуваалцах нь ибадат юм."},{"tr":"Engelli bir kardeşimizin hayatını kolaylaştırmak, ihtiyaç sahibi bir öğrencinin eğitimine destek olmak, geçim sıkıntısı çeken bir komşumuzun yardımına koşmak ibadettir.","ar":"وَتَيْسِيرُ حَيَاةِ أَحَدِ إِخْوَانِنَا مِنْ ذَوِي المُعَاقِين، وَدَعْمُ طَالِبٍ مُحْتَاجٍ فِي تَعْلِيمِهِ، وَالْمُسَارَعَةُ إِلَى اعانة جَارٍ يُعَانِي ضِيقَ الْعَيْشِ، كُلُّ ذَلِكَ عِبَادَةٌ.","en":"Making life easier for a brother or sister with a disability, supporting the education of a student in need, and extending a helping hand to a neighbor facing financial hardship are acts of worship.","mn":"Хөгжлийн бэрхшээлтэй ах дүүгийнхээ амьдралыг хөнгөвчлөх, тусламж хэрэгтэй сурагчийн боловсролд дэмжлэг үзүүлэх, амьжиргааны хүндрэлтэй хөршдөө туслахаар яарах нь ибадат юм."},{"tr":"Rahmet Elçisi (s.a.s)’in, “Kul, kardeşinin yardımında olduğu sürece, Allah da o kulun yardımcısıdır” muştusuna nail olabilmek ne büyük saadettir.","ar":"وَقَدْ بَشَّرَنَا رَسُولُ الرَّحْمَةِ ﷺ بِقَوْلِهِ: \"وَاللَّهُ فِي عَوْنِ الْعَبْدِ مَا كَانَ الْعَبْدُ فِي عَوْنِ أَخِيهِ.\" فَمَا أَعْظَمَ السَّعَادَةَ فِي أَنْ نَنَالَ هَذِهِ الْبُشْرَى.","en":"What a great blessing it is to receive the glad tidings of the Messenger of Mercy (saw): “Allah continues to help His servant as long as the servant helps his brother.”","mn":"Нигүүлслийн Элч (с.а.с)-ийн \"Боол ах дүүдээ тусалж байх хугацаанд Аллах ч мөн тэр боолд туслагч байна\" гэсэн сайн мэдээнд хүртэх нь ямар их аз жаргал вэ!"},{"tr":"Değerli Müminler!","ar":"أَيُّهَا الْمُؤْمِنُونَ الْأَفَاضِلُ!","en":"Honorable Believers!","mn":"Хүндэт итгэгчид ээ!"},{"tr":"Yeri geldiğinde yüzümüzde beliren bir tebessüm, yeri geldiğinde insanlara eziyet veren engelleri kaldırmak, yeri geldiğinde ise mazlum ve mağdurlara el uzatmak bir sadakadır ve her sadaka bir ibadettir.","ar":"قَدْ تَكُونُ الِابْتِسَامَةُ الَّتِي تَرْتَسِمُ عَلَى وُجُوهِنَا صَدَقَةً، وَقَدْ تَكُونُ إِمَاطَةُ مَا يُؤْذِي النَّاسَ عَنْ طَرِيقِهِمْ صَدَقَةً، وَقَدْ يَكُونُ مَدُّ يَدِ الْعَوْنِ إِلَى الْمَظْلُومِينَ وَالْمُتَضَرِّرِينَ صَدَقَةً، وَكُلُّ صَدَقَةٍ عِبَادَةٌ.","en":"A smile on our faces, removing obstacles that cause harm to others, or extending a helping hand to the oppressed and those who have suffered injustice are all forms of sadaqah, and every act of sadaqah is an act of worship.","mn":"Хэрэгтэй үед нүүрэндээ тодруулсан инээмсэглэл, хүмүүст саад болох зүйлийг замаас зайлуулах, хэлмэгдэгсэд болон хохирогчдод тусламжийн гар сунгах нь садака бөгөөд садака бүр ибадат юм."},{"tr":"Kimi zaman bir hastaya kan vererek can olmak, kimi zaman da çaresizce bekleyen bir kardeşimiz için dini ve tıbbi hassasiyetleri dikkate alarak organ bağışında bulunmak bir iyiliktir ve her iyilik bir ibadettir.","ar":"وَقَدْ يَكُونُ التَّبَرُّعُ بِالدَّمِ لِإِنْقَاذِ حَيَاةِ مَرِيضٍ، أَوِ التَّبَرُّعُ بِالْأَعْضَاءِ لِأَخٍ لَنَا يَنْتَظِرُ الْعَوْنَ وَلَا حِيلَةَ لَهُ دون ذلك، مَعَ مُرَاعَاةِ الِاعْتِبَارَاتِ الدِّينِيَّةِ وَالطِّبِّيَّةِ، عَمَلًا مِنْ أَعْمَالِ الْخَيْرِ، وَكُلُّ عَمَلٍ مِنْ أَعْمَالِ الْخَيْرِ عِبَادَةٌ.","en":"Whether it is saving a life by donating blood to a patient or donating an organ to a brother or sister desperately awaiting help, while taking religious and medical considerations into account, these are acts of goodness, and every good deed is an act of worship.","mn":"Заримдаа өвчтөнд цусаа өгч амийг нь аврах, заримдаа найдвар тасран хүлээж буй ах дүүдээ шашны болон анагаах ухааны шаардлагыг харгалзан эрхтэнээ хандивлах нь сайн үйл бөгөөд сайн үйл бүр ибадат юм."},{"tr":"Ayet-i kerime gayet açıktır: “…Kim, bir insanın hayatını kurtarırsa bütün insanların hayatını kurtarmış gibi olur…”","ar":"وَالْآيَةُ الْكَرِيمَةُ وَاضِحَةٌ جَلِيَّةٌ فِي هَذَا الشَّأْنِ، حَيْثُ قَالَ اللَّهُ تَعَالَى: \"وَمَنْ أَحْيَاهَا فَكَأَنَّمَا أَحْيَا النَّاسَ جَمِيعًا.\"","en":"The following verse of the Qur’an clearly states: “…Whoever saves a life, it will be as if they saved all of humanity…”","mn":"Ариун айат үүнийг тодорхой хэлдэг: \"...Хэн нэгэн хүний амийг аварвал бүх хүн төрөлхтний амийг аварсантай адил болно...\""},{"tr":"Aziz Kardeşlerim!","ar":"أَيُّهَا الْمُؤْمِنُونَ الْأَعِزَّاءُ!","en":"Dear Brothers and Sisters!","mn":"Эрхэм ах дүү нар аа!"},{"tr":"Ömrümüz kısa, dünya geçici, ahiret hayatı ise haktır, gerçektir ve ebedidir.","ar":"إِنَّ أَعْمَارَنَا قَصِيرَةٌ، وَالدُّنْيَا فَانِيَةٌ، أَمَّا حَيَاةُ الْآخِرَةِ فَهِيَ حَقٌّ لَا رَيْبَ فِيهِ، وَأَبَدِيَّةٌ.","en":"Our lives are short, this world is temporary, and the Hereafter is certain, real, and eternal.","mn":"Бидний нас богино, энэ дэлхий түр зуурынх, харин хойд насны амьдрал бол үнэн, бодит бөгөөд мөнхийн юм."},{"tr":"Gün gelir; nefesimiz biter, adımlarımız durur, dünyaya ait olan ne varsa geride bırakır gideriz.","ar":"وَسَيَأْتِي يَوْمٌ تَنْقَطِعُ فِيهِ أَنْفَاسُنَا، وَتَتَوَقَّفُ فِيهِ خُطَانَا، وَسَنَرْحَلُ عَنْ هَذِهِ الدُّنْيَا تَارِكِينَ وَرَاءَنَا كُلَّ مَا فِيهَا.","en":"A day will come when we take our last breath, our footsteps come to a halt, and we depart this world, leaving behind everything that belongs to it.","mn":"Нэг өдөр амьсгал маань тасарч, алхам маань зогсож, энэ дэлхийд хамаарах бүхнийг ардаа орхин явах болно."},{"tr":"Evet, Değerli Kardeşlerim!","ar":"نَعَمْ، أَيُّهَا الْإِخْوَةُ الْكِرَامُ!","en":"Indeed, Dear Brothers and Sisters!","mn":"Тийм ээ, эрхэм ах дүү нар аа!"},{"tr":"Asıl mesele, dünyada ne kadar kaldığımız değil, Allah’a olan kulluğumuz ve O’nun rızası için yaptığımız iyiliklerimizdir.","ar":"إِنَّ الْعِبْرَةَ لَيْسَتْ بِطُولِ مُكْثِنَا فِي الدُّنْيَا، وَإِنَّمَا بِعُبُودِيَّتِنَا لِلَّهِ تَعَالَى، وَبِمَا نَقُومُ بِهِ مِنْ أَعْمَالِ الْخَيْرِ ابْتِغَاءَ مَرْضَاتِهِ.","en":"What truly matters is not how long we remain in this world, but our devotion to Allah and the good deeds we perform seeking His pleasure.","mn":"Гол асуудал бол энэ дэлхийд хэр удаан амьдарсан нь бус, харин Аллахад зүтгэсэн бидний боолчлол болон Түүний таалалын төлөө хийсэн сайн үйлс маань юм."},{"tr":"Asıl mesele, Sevgili Peygamberimiz (s.a.s)’in, “…Allah katında amellerin en sevimlisi, az da olsa devamlı olanıdır” tavsiyesine uyarak ömrümüzü ibadete çevirebilmektir.","ar":"وَالْأَهَمُّ مِنْ ذَلِكَ أَنْ نَجْعَلَ حَيَاتَنَا كُلَّهَا عِبَادَةً، عَمَلًا بِوَصِيَّةِ نَبِيِّنَا الْحَبِيبِ ﷺ الَّذِي قَالَ: \"وَإِنَّ أَحَبَّ الْعَمَلِ إِلَى اللَّهِ أَدْوَمُهُ وَإِنْ قَلَّ\".4","en":"What truly matters is turning our entire lives into acts of worship by following the advice of our beloved Prophet (saw): “…The deeds most beloved to Allah are those performed consistently, even if they are few.”","mn":"Гол асуудал бол хайрт Бошиглогч (с.а.с)-ийн \"...Аллахын өмнө хамгийн хайртай үйлс бол бага ч гэсэн тогтмол хийгддэг нь юм\" гэсэн зөвлөгөөг дагаж, амьдралаа ибадат болгон хувиргах явдал юм."},{"tr":"Hutbemizi, Nahl sûresi doksan yedinci ayet-i kerimenin mealiyle bitiriyoruz: “Erkek ya da kadın, kim mümin olarak salih amel işlerse, elbette ona hoş bir hayat yaşatacağız ve onların mükâfatlarını yaptıklarına karşılık olarak en güzeliyle vereceğiz.”","ar":"وَنَخْتَتِمُ خُطْبَتَنَا بِقَوْلِ اللَّهِ تَعَالَى فِي الْآيَةِ السَّابِعَةِ وَالتِّسْعِينَ مِنْ سُورَةِ النَّحْلِ: \"مَنْ عَمِلَ صَالِحًا مِنْ ذَكَرٍ أَوْ أُنْثَى وَهُوَ مُؤْمِنٌ فَلَنُحْيِيَنَّهُ حَيَاةً طَيِّبَةً وَلَنَجْزِيَنَّهُمْ أَجْرَهُمْ بِأَحْسَنِ مَا كَانُوا يَعْمَلُونَ\".5","en":"We conclude this week’s khutbah with the meaning of verse 97 of Surah An-Nahl: “Whoever does good, whether male or female, and is a believer, We will surely bless them with a good life, and We will certainly reward them according to the best of their deeds.”","mn":"Хутбаагаа бид Нахл судрын ерэн долдугаар айатын утгаар төгсгөж байна: \"Эрэгтэй ч бай, эмэгтэй ч бай, итгэгч байхдаа сайн үйл хийсэн хэнд ч Бид сайхан амьдрал заяах бөгөөд тэдний шагналыг хийсэн үйлсийнх нь хамгийн сайнаар нь өгөх болно.\""}],"current":0,"note":"TR/AR/EN: Diyanet İşleri Başkanlığı Din Hizmetleri Genel Müdürlüğü. MN: taslak çeviri, kontrol edilmeli."}}];
 </script>
@@ -1185,9 +1347,18 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
   };
 
   function renderSources() {
-    $('#sources').innerHTML = state.languages.map((l) =>
-      `<label>${esc(l.name)}${l.code === state.trackLang ? ' <small>imamın okuduğu</small>' : ''}
-        <textarea id="src-${esc(l.code)}" data-code="${esc(l.code)}" dir="${l.dir}" placeholder="${esc(l.name)} metnini yapıştırın">${esc(state.sources[l.code] || '')}</textarea></label>`).join('');
+    $('#sources').innerHTML = state.languages.map((l) => {
+      const c = esc(l.code);
+      return `<div class="src" data-code="${c}">
+        <div class="src-head">
+          <label for="src-${c}">${esc(l.name)}${l.code === state.trackLang ? ' <small>imamın okuduğu</small>' : ''}</label>
+          <label class="file-btn" for="pdf-${c}">PDF yükle</label>
+          <input type="file" id="pdf-${c}" data-code="${c}" accept=".pdf,application/pdf" class="sr">
+        </div>
+        <textarea id="src-${c}" data-code="${c}" dir="${l.dir}" placeholder="${esc(l.name)} PDF'ini buraya sürükleyin ya da metni yapıştırın">${esc(state.sources[l.code] || '')}</textarea>
+        <p class="src-msg" id="msg-${c}" hidden></p>
+      </div>`;
+    }).join('');
   }
   $('#sources').addEventListener('input', (e) => {
     const t = e.target.closest('textarea[data-code]');
@@ -1196,19 +1367,107 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
     persist();
   });
 
-  $('#btnAlign').onclick = async () => {
+  // ---------- PDF yükleme: metni çıkar, kutuya koy, hazırsa kendiliğinden eşle ----------
+  function srcMsg(code, text, kind = '') {
+    const m = document.getElementById('msg-' + code);
+    if (!m) return;
+    m.textContent = text;
+    m.dataset.kind = kind;
+    m.hidden = !text;
+  }
+  async function handlePdf(code, file) {
+    const lang = state.languages.find((l) => l.code === code);
+    if (!lang || !file) return;
+    if (!/\.pdf$/i.test(file.name) && file.type !== 'application/pdf') { srcMsg(code, 'Bu bir PDF dosyası değil.', 'err'); return; }
+    srcMsg(code, 'PDF okunuyor…');
+    try {
+      const { text, broken } = await HutbePdf.extract(await file.arrayBuffer(), lang.dir === 'rtl');
+      if (broken) {
+        srcMsg(code, 'Bu PDF\'teki Arapça yazı bozuk okunuyor (Diyanet\'in Arapça PDF\'lerinde yazı tipi yüzünden olur). Diyanet\'in Word dosyasını açıp metni kopyalayın ve bu kutuya yapıştırın.', 'err');
+        return;
+      }
+      if (!text.trim()) { srcMsg(code, 'PDF\'te okunabilir yazı bulunamadı. Taranmış bir görüntü olabilir; metni elle yapıştırın.', 'err'); return; }
+      state.sources[code] = text;
+      const ta = document.getElementById('src-' + code);
+      if (ta) ta.value = text;
+      persist();
+      const n = HutbeAlign.splitSentences(HutbeAlign.cleanText(text)).length;
+      srcMsg(code, `${file.name}: ${n} cümle okundu.`, 'ok');
+      autoAlignIfReady();
+    } catch (err) {
+      srcMsg(code, 'PDF okunamadı: ' + err.message, 'err');
+    }
+  }
+  $('#sources').addEventListener('change', (e) => {
+    const inp = e.target.closest('input[type=file][data-code]');
+    if (!inp) return;
+    handlePdf(inp.dataset.code, inp.files[0]);
+    inp.value = '';
+  });
+  $('#sources').addEventListener('dragover', (e) => {
+    const box = e.target.closest('.src');
+    if (!box || !e.dataTransfer?.types.includes('Files')) return;
+    e.preventDefault();
+    box.classList.add('drop');
+  });
+  $('#sources').addEventListener('dragleave', (e) => { e.target.closest('.src')?.classList.remove('drop'); });
+  $('#sources').addEventListener('drop', (e) => {
+    const box = e.target.closest('.src');
+    if (!box || !e.dataTransfer?.files.length) return;
+    e.preventDefault();
+    box.classList.remove('drop');
+    handlePdf(box.dataset.code, e.dataTransfer.files[0]);
+  });
+
+  // İmamın okuduğu metin ve en az bir çeviri hazırsa eşle
+  let rowsEdited = false;
+  function autoAlignIfReady() {
+    const filled = state.languages.filter((l) => (state.sources[l.code] || '').trim());
+    if (!filled.some((l) => l.code === state.trackLang) || filled.length < 2) return;
+    doAlign(rowsEdited);
+  }
+
+  // Türkçe metnin ilk satırı başlıksa ("İBADET") hutbe adını ondan al
+  function titleFromText(text) {
+    const first = HutbeAlign.cleanText(text).split('\n')[0] || '';
+    if (first.length < 60 && first === first.toLocaleUpperCase('tr') && /\p{L}/u.test(first)) {
+      const t = first.toLocaleLowerCase('tr').replace(/(^|\s)(\p{L})/gu, (m, s, ch) => s + ch.toLocaleUpperCase('tr'));
+      return 'Cuma Hutbesi – ' + t;
+    }
+    return null;
+  }
+
+  async function doAlign(confirmFirst) {
     const code = state.trackLang;
     if (!(state.sources[code] || '').trim()) { toast(trackLang().name + ' metni boş. Önce imamın okuyacağı metni girin.'); return; }
-    if (state.rows.length && !(await ask('Mevcut eşleme ve tablodaki düzeltmeleriniz silinip metinler yeniden eşlenecek.', 'Yeniden eşle'))) return;
+    if (confirmFirst && state.rows.length && !(await ask('Tablodaki elle yaptığınız düzeltmeler silinip metinler yeniden eşlenecek.', 'Yeniden eşle'))) return;
     const texts = {};
     for (const l of state.languages) texts[l.code] = state.sources[l.code] || '';
     state.rows = HutbeAlign.autoAlign(texts, code);
     state.current = 0;
+    rowsEdited = false;
+    const t = titleFromText(texts[code]);
+    if (t) state.title = t;
     const counts = state.languages.filter((l) => texts[l.code].trim())
       .map((l) => `${l.name} ${HutbeAlign.splitSentences(HutbeAlign.cleanText(texts[l.code])).length}`).join(', ');
-    info(`${state.rows.length} satır oluştu. Cümle sayıları: ${counts}.`);
+    const missing = state.languages.filter((l) => l.show && !texts[l.code].trim()).map((l) => l.name);
+    info(`${state.rows.length} satır eşlendi. Cümle sayıları: ${counts}.` + (missing.length ? ` Eksik: ${missing.join(', ')}.` : ''));
     renderRows(); commit(); renderLive();
     toast('Metinler eşlendi');
+  }
+  $('#btnAlign').onclick = () => doAlign(rowsEdited);
+  // Metin yapıştırılınca da kendiliğinden eşle
+  $('#sources').addEventListener('paste', (e) => {
+    const t = e.target.closest('textarea[data-code]');
+    if (!t) return;
+    setTimeout(() => { state.sources[t.dataset.code] = t.value; persist(); srcMsg(t.dataset.code, ''); autoAlignIfReady(); }, 0);
+  });
+
+  $('#btnClear').onclick = async () => {
+    if (!(await ask('Kutulardaki bütün metinler silinecek. Ekrandaki hutbe, siz yenisini eşleyene kadar kalır.', 'Temizle'))) return;
+    for (const l of state.languages) state.sources[l.code] = '';
+    persist();
+    renderSources();
   };
 
   function renderRows() {
@@ -1235,6 +1494,7 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
     if (!t) return;
     state.rows[+t.dataset.i][t.dataset.code] = t.value;
     t.classList.toggle('empty', !t.value);
+    rowsEdited = true;
     commit();
   });
 
@@ -1273,6 +1533,7 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
         break;
     }
     if (state.current >= rows.length) state.current = Math.max(0, rows.length - 1);
+    rowsEdited = true;
     renderRows();
     commit();
   });
