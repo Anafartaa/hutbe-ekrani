@@ -220,6 +220,9 @@ table.langs .badge { font-size: 11px; font-weight: 600; text-transform: uppercas
 #rowsTable th .edit { background: color-mix(in srgb, var(--live) 14%, transparent); color: var(--live); }
 
 .arch-label { font-size: 13px; font-weight: 600; color: var(--muted); }
+
+/* Cami kodu */
+.cami-box { display: grid; gap: 10px; }
 </style>
 </head>
 <body>
@@ -322,6 +325,21 @@ table.langs .badge { font-size: 11px; font-weight: 600; text-transform: uppercas
           <label class="check"><input type="checkbox" id="optNums"> Cümle numaralarını göster</label>
         </div>
         <div class="field"><label for="optLayout">Ekran düzeni</label><select id="optLayout"><option value="kart">Kartlı (her cümle ayrı blok)</option><option value="klasik">Klasik</option></select></div>
+      </div>
+
+      <div class="group" id="camiGroup">
+        <h3>Cami kodu</h3>
+        <p class="muted">Moğolca, Kazakça düzeltmeleri ve kendi tercümelerinizi bütün bilgisayarlarınızda aynı tutar. Örneğin hoca evinde düzeltir, camideki ekranda görünür. Kodu bilmeyen kimse bu düzeltmeleri göremez ve değiştiremez.</p>
+        <div id="camiOff" class="cami-box">
+          <button id="camiCreate" class="primary">Cami kodu oluştur</button>
+          <form id="camiJoinForm" class="add-lang"><input id="camiInput" placeholder="Size gönderilen kodu ya da bağlantıyı yapıştırın" autocomplete="off"><button class="ghost" type="submit">Bağlan</button></form>
+        </div>
+        <div id="camiOn" class="cami-box" hidden>
+          <div><span id="camiState" class="remote-state" data-state="off">Bağlanıyor…</span></div>
+          <p class="muted small">Hocaya ya da camideki bilgisayara bu bağlantıyı gönderin (ör. WhatsApp). Açtıkları anda aynı düzeltmeleri görürler.</p>
+          <div class="remote-link"><input id="camiLink" readonly aria-label="Cami kodu bağlantısı"><button id="camiCopy" class="ghost">Kopyala</button></div>
+          <div class="btn-row"><button id="camiSyncNow" class="ghost">Şimdi eşitle</button><button id="camiLeave" class="ghost">Bu bilgisayarı ayır</button></div>
+        </div>
       </div>
 
       <div class="group wide">
@@ -1402,6 +1420,7 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
     const all = loadFixes();
     if (Object.keys(fx).length) all[state.readyFile] = fx; else delete all[state.readyFile];
     saveFixes(all);
+    cloudSchedulePush();
   }
   function applyFixes(file) {
     const fx = loadFixes()[file];
@@ -1863,6 +1882,167 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
     toast: (m) => toast(m),
     onChange: (fn) => changeHooks.push(fn),
   };
+
+  // ---------- Cami kodu: düzeltmeleri bilgisayarlar arasında eşitle (Supabase) ----------
+  // Düzeltmeler internette cami koduna göre saklanır. Kodun kendisi sunucuda saklanmaz; kodu bilmeyen okuyamaz/yazamaz.
+  const CLOUD = Object.assign({
+    url: 'https://ggpwsyvalefzbwjqcbcq.supabase.co',
+    key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdncHdzeXZhbGVmemJ3anFjYmNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQyMzg5MjksImV4cCI6MjEwOTgxNDkyOX0.gzxV3gtwPX5PXrIdU89XO1TRCyERBDV5rCZda27jQpQ',
+  }, window.HUTBE_CLOUD_CFG || {});
+  const CAMI_KEY = 'hutbe-ekran.cami';
+  let cami = null;
+  try { cami = JSON.parse(localStorage.getItem(CAMI_KEY) || 'null'); } catch (e) { cami = null; }
+  let remote = {};       // sunucudaki son bilinen düzeltmeler: dosya -> dil -> cümle -> metin
+  let pushTimer = null, pushing = false, dirty = false, lastSync = 0, cloudErr = '';
+  const validCode = (k) => typeof k === 'string' && /^[a-z0-9-]{16,100}$/.test(k);
+
+  async function rpc(fn, body) {
+    const r = await fetch(`${CLOUD.url}/rest/v1/rpc/${fn}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: CLOUD.key, Authorization: 'Bearer ' + CLOUD.key },
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) throw new Error('Sunucu hatası ' + r.status);
+    return r.json();
+  }
+  function cloudStatus(text, kind) {
+    const el = $('#camiState');
+    if (el) { el.textContent = text; el.dataset.state = kind; }
+  }
+  function renderCami() {
+    $('#camiOff').hidden = !!cami;
+    $('#camiOn').hidden = !cami;
+    if (!cami) return;
+    $('#camiLink').value = location.href.split('#')[0] + '#cami=' + cami.kod;
+    if (cloudErr) cloudStatus(cloudErr, 'err');
+    else if (lastSync) cloudStatus('Eşitlendi · ' + new Date(lastSync).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }), 'on');
+    else cloudStatus('Bağlanıyor…', 'off');
+  }
+  const asMap = (rows) => {
+    const m = {};
+    for (const r of rows || []) ((m[r.dosya] = m[r.dosya] || {})[r.dil] = m[r.dosya][r.dil] || {})[r.cumle] = r.metin;
+    return m;
+  };
+  // Yereldeki ile sunucudaki arasındaki farkları gönder (silinenler boş metinle)
+  async function cloudPush() {
+    if (!cami || pushing) return;
+    pushing = true;
+    try {
+      const local = loadFixes();
+      const list = [];
+      for (const file of new Set(Object.keys(local).concat(Object.keys(remote)))) {
+        const L = local[file] || {}, R = remote[file] || {};
+        for (const dil of new Set(Object.keys(L).concat(Object.keys(R)))) {
+          if (locked(dil)) continue;
+          const l = L[dil] || {}, r = R[dil] || {};
+          for (const cumle of new Set(Object.keys(l).concat(Object.keys(r)))) {
+            if ((l[cumle] || '') !== (r[cumle] || '')) list.push({ dosya: file, dil, cumle, metin: l[cumle] || '' });
+          }
+        }
+      }
+      for (let i = 0; i < list.length; i += 400) await rpc('duzeltmeleri_kaydet', { kod: cami.kod, kayitlar: list.slice(i, i + 400) });
+      remote = JSON.parse(JSON.stringify(local));
+      dirty = false;
+      lastSync = Date.now(); cloudErr = '';
+    } catch (e) {
+      cloudErr = 'İnternet yok ya da sunucuya ulaşılamadı; düzeltmeler bu bilgisayarda bekliyor, bağlantı gelince gönderilecek.';
+    } finally { pushing = false; renderCami(); }
+  }
+  function cloudSchedulePush() {
+    if (!cami) return;
+    dirty = true;
+    clearTimeout(pushTimer);
+    pushTimer = setTimeout(cloudPush, 1200);
+  }
+  // Sunucudaki düzeltmeleri al; ekrandaki hutbeye uygula (bu bilgisayarda gönderilmeyi bekleyen değişiklik yoksa)
+  async function cloudPull() {
+    if (!cami) return;
+    if (dirty) { await cloudPush(); if (dirty) return; }
+    try {
+      const m = asMap(await rpc('duzeltmeleri_getir', { kod: cami.kod }));
+      const changedNow = JSON.stringify(m[state.readyFile] || {}) !== JSON.stringify(loadFixes()[state.readyFile] || {});
+      remote = m;
+      saveFixes(JSON.parse(JSON.stringify(m)));
+      lastSync = Date.now(); cloudErr = '';
+      if (changedNow) applyRemoteToRows();
+    } catch (e) {
+      cloudErr = 'İnternet yok ya da sunucuya ulaşılamadı; şu an bu bilgisayardaki düzeltmeler kullanılıyor.';
+    }
+    renderCami();
+  }
+  // Ekrandaki hutbenin düzenlenebilir dillerini: aslı + sunucudaki düzeltmeler
+  function applyRemoteToRows() {
+    const h = readyOf(state.readyFile);
+    if (!h) return;
+    const tl = state.trackLang;
+    const orig = new Map(h.data.rows.map((r) => [r[tl], r]));
+    const fx = loadFixes()[state.readyFile] || {};
+    let changed = false;
+    state.rows.forEach((r) => {
+      const o = orig.get(r[tl]) || {};
+      for (const l of state.languages) {
+        if (locked(l.code)) continue;
+        const want = (fx[l.code] && fx[l.code][r[tl]] !== undefined) ? fx[l.code][r[tl]] : (o[l.code] || '');
+        if ((r[l.code] || '') !== want) { r[l.code] = want; changed = true; }
+      }
+    });
+    if (!changed) return;
+    state.editedFile = Object.keys(fx).length ? state.readyFile : null;
+    commit({ keepTracker: true });
+    const editing = document.activeElement && document.activeElement.closest && document.activeElement.closest('#rowsTable');
+    if (!$('#tab-texts').hidden && !editing) renderRows();
+    toast('Düzeltmeler başka bir bilgisayardan güncellendi');
+  }
+  function joinCami(kod) {
+    cami = { kod };
+    try { localStorage.setItem(CAMI_KEY, JSON.stringify(cami)); } catch (e) { /* kayıt yok */ }
+    remote = {}; lastSync = 0; cloudErr = '';
+    renderCami();
+    // Önce bu bilgisayardaki düzeltmeleri gönder, sonra sunucudakileri al
+    cloudPush().then(cloudPull);
+  }
+  function newCode() {
+    const abc = 'abcdefghjkmnpqrstuvwxyz23456789';
+    const b = crypto.getRandomValues(new Uint8Array(24));
+    return Array.from(b, (x) => abc[x % abc.length]).join('').match(/.{4}/g).join('-');
+  }
+  $('#camiCreate').onclick = () => { joinCami(newCode()); toast('Cami kodu oluşturuldu. Bağlantıyı hocaya gönderin.'); };
+  $('#camiJoinForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const v = $('#camiInput').value.trim();
+    const kod = (v.match(/cami=([a-z0-9-]+)/) || [])[1] || v.toLowerCase();
+    if (!validCode(kod)) { toast('Bu bir cami kodu değil. Size gönderilen bağlantıyı ya da kodu olduğu gibi yapıştırın.'); return; }
+    $('#camiInput').value = '';
+    joinCami(kod);
+    toast('Bu bilgisayar cami koduna bağlandı');
+  });
+  $('#camiCopy').onclick = () => {
+    const inp = $('#camiLink');
+    const done = () => toast('Bağlantı kopyalandı');
+    if (navigator.clipboard) navigator.clipboard.writeText(inp.value).then(done, () => inp.select()); else { inp.select(); done(); }
+  };
+  $('#camiSyncNow').onclick = () => cloudPull();
+  $('#camiLeave').onclick = async () => {
+    if (!(await ask('Bu bilgisayar cami kodundan ayrılacak. Düzeltmeler bu bilgisayarda kalır ama artık diğer bilgisayarlarla eşitlenmez.', 'Ayır'))) return;
+    cami = null;
+    try { localStorage.removeItem(CAMI_KEY); } catch (e) { /* kayıt yok */ }
+    renderCami();
+  };
+  // Bağlantıyla açıldıysa (…#cami=kod): sor ve bağlan; kodu adres çubuğundan sil
+  (async () => {
+    const m = location.hash.match(/cami=([a-z0-9-]+)/);
+    if (!m) return;
+    history.replaceState(null, '', location.pathname + location.search);
+    if (!validCode(m[1]) || (cami && cami.kod === m[1])) return;
+    if (await ask(cami ? 'Bu bilgisayar başka bir cami koduna bağlı. Yeni koda geçilsin mi?' : 'Bu bilgisayar size gönderilen cami koduna bağlansın mı? Düzeltmeler diğer bilgisayarlarla aynı olur.', 'Bağlan')) {
+      joinCami(m[1]);
+      toast('Bu bilgisayar cami koduna bağlandı');
+    }
+  })();
+  setInterval(() => { if (!listening || !$('#tab-texts').hidden) cloudPull(); }, 20000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') cloudPull(); });
+  renderCami();
+  if (cami) cloudPull();
 
   // ---------- Başlangıç ----------
   if (!state.rows.length && READY.length) loadReady(0); // ilk açılışta en yeni hazır hutbe gelir
