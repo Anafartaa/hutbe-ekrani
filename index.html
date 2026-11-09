@@ -1365,6 +1365,7 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
     state.current = 0;
     state.readyFile = READY[idx].file;
     state.readySig = sig(READY[idx]);
+    state.editedFile = null;
     commit();
     return h;
   }
@@ -1390,6 +1391,13 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
       // Aynı hutbenin düzeltilmiş hali: hutbe henüz başlamadıysa (ilk cümle/açılış) güncel metni yükle
       if (!state.readySig) { state.readySig = sig(READY[0]); persist(); return; }
       if (state.readySig === sig(READY[0]) || state.current > 0) return;
+      if (state.editedFile === state.readyFile) {
+        // Elle yapılmış düzeltmeler (ör. Moğolca) silinmesin: güncellemeyi uygulama, bir kez haber ver
+        state.readySig = sig(READY[0]);
+        persist();
+        toast('Diyanet bu hutbenin metnini güncelledi. Sizin elle yaptığınız düzeltmeler korunsun diye uygulanmadı. İsterseniz Metinler > Yükle ile alabilirsiniz.');
+        return;
+      }
       loadReady(0);
       setSplash(true);
       renderLive();
@@ -1597,6 +1605,7 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
     state.rows[+t.dataset.i][t.dataset.code] = t.value;
     t.classList.toggle('empty', !t.value);
     rowsEdited = true;
+    state.editedFile = state.readyFile || 'el'; // bu hutbede elle düzeltme var: otomatik güncelleme silmesin
     commit();
   });
 
@@ -1636,6 +1645,7 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
     }
     if (state.current >= rows.length) state.current = Math.max(0, rows.length - 1);
     rowsEdited = true;
+    state.editedFile = state.readyFile || 'el'; // bu hutbede elle düzeltme var: otomatik güncelleme silmesin
     renderRows();
     commit();
   });
