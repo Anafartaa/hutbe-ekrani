@@ -276,6 +276,8 @@ table.langs .badge { font-size: 11px; font-weight: 600; text-transform: uppercas
       <div class="actions">
         <label class="sr" for="readyList">Hazır hutbe</label>
         <select id="readyList"></select>
+        <button id="btnUndo" class="ghost" disabled title="Son değişikliği geri al (Ctrl+Z)">↶ Geri al</button>
+        <button id="btnRedo" class="ghost" disabled title="Geri alınanı yeniden yap (Ctrl+Y)">↷ İleri al</button>
         <button id="btnReady" class="primary">Yükle</button>
         <button id="btnNew" class="ghost">Yeni hutbe gir</button>
       </div>
@@ -1375,6 +1377,7 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
     state.readySig = sig(READY[idx]);
     state.editedFile = null;
     commit();
+    resetHistory();
     return h;
   }
 
@@ -1599,67 +1602,68 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
       `<td class="idx">${i + 1}</td>` +
       langs.map((l) => locked(l.code)
         ? `<td class="locked"><div class="cell" dir="${l.dir}" lang="${esc(l.code)}">${esc(r[l.code] || '') || '<i class="muted">—</i>'}</div></td>`
-        : `<td><textarea id="cell-${i}-${esc(l.code)}" data-i="${i}" data-code="${esc(l.code)}" dir="${l.dir}" class="${r[l.code] ? '' : 'empty'}" aria-label="${i + 1}. satır, ${esc(l.name)}">${esc(r[l.code] || '')}</textarea>
-        <div class="tools">
-          <button data-op="pull" data-i="${i}" data-code="${esc(l.code)}" title="Alt satırın ilk cümlesini bu hücreye al">Alttan al</button>
-          <button data-op="push" data-i="${i}" data-code="${esc(l.code)}" title="Bu hücrenin son cümlesini alt satıra gönder">Aşağı gönder</button>
-        </div></td>`).join('') +
+        : `<td><textarea id="cell-${i}-${esc(l.code)}" data-i="${i}" data-code="${esc(l.code)}" dir="${l.dir}" class="${r[l.code] ? '' : 'empty'}" aria-label="${i + 1}. satır, ${esc(l.name)}">${esc(r[l.code] || '')}</textarea></td>`).join('') +
       '</tr>').join('');
     $('#rowsTable').innerHTML = '<thead>' + head + '</thead><tbody>' +
       (body || `<tr><td colspan="${langs.length + 1}" class="muted" style="padding:20px">Henüz satır yok. Hazır bir hutbe yükleyin veya yeni hutbe girin.</td></tr>`) + '</tbody>';
   }
 
 
+  // Düzenleme geçmişi: her hücrede yapılan bir düzeltme (hücreden çıkınca) tek adım sayılır
+  const hist = { past: [], future: [] };
+  let editBase = null; // düzenlemeye başlamadan önceki satırlar
+  function updateHistBtns() {
+    $('#btnUndo').disabled = !hist.past.length;
+    $('#btnRedo').disabled = !hist.future.length;
+  }
+  function resetHistory() { hist.past = []; hist.future = []; editBase = null; updateHistBtns(); }
+  function closeEdit() {
+    if (editBase === null) return;
+    const now = JSON.stringify(state.rows);
+    if (now !== editBase) { hist.past.push(editBase); if (hist.past.length > 100) hist.past.shift(); hist.future = []; }
+    editBase = null;
+    updateHistBtns();
+  }
+  function restore(json) {
+    state.rows = JSON.parse(json);
+    rowsEdited = true;
+    state.editedFile = state.readyFile || 'el';
+    renderRows();
+    commit();
+    updateHistBtns();
+  }
   $('#rowsTable').addEventListener('input', (e) => {
     const t = e.target.closest('textarea[data-code]');
     if (!t || locked(t.dataset.code)) return;
+    if (editBase === null) editBase = JSON.stringify(state.rows);
     state.rows[+t.dataset.i][t.dataset.code] = t.value;
     t.classList.toggle('empty', !t.value);
     rowsEdited = true;
     state.editedFile = state.readyFile || 'el'; // bu hutbede elle düzeltme var: otomatik güncelleme silmesin
     commit();
+    $('#btnUndo').disabled = false;
   });
-
-  $('#rowsTable').addEventListener('click', async (e) => {
-    const b = e.target.closest('button[data-op]');
-    if (!b) return;
-    const i = +b.dataset.i, code = b.dataset.code, rows = state.rows;
-    if (!code || locked(code)) return; // satır birleştirme/silme ve Diyanet dillerinde kaydırma kapalı
-    const split = (s) => HutbeAlign.splitSentences(s || '');
-    switch (b.dataset.op) {
-      case 'pull': {
-        if (i + 1 >= rows.length) return;
-        const below = split(rows[i + 1][code]);
-        if (!below.length) return;
-        rows[i][code] = [rows[i][code], below.shift()].filter(Boolean).join(' ');
-        rows[i + 1][code] = below.join(' ');
-        break;
-      }
-      case 'push': {
-        const mine = split(rows[i][code]);
-        if (!mine.length) return;
-        if (i + 1 >= rows.length) rows.push({});
-        rows[i + 1][code] = [mine.pop(), rows[i + 1][code]].filter(Boolean).join(' ');
-        rows[i][code] = mine.join(' ');
-        break;
-      }
-      case 'merge': {
-        if (i + 1 >= rows.length) return;
-        for (const l of state.languages) rows[i][l.code] = [rows[i][l.code], rows[i + 1][l.code]].filter(Boolean).join(' ');
-        rows.splice(i + 1, 1);
-        break;
-      }
-      case 'insert': rows.splice(i + 1, 0, {}); break;
-      case 'delete':
-        if (!(await ask(`${i + 1}. satır tüm dillerde silinecek.`, 'Sil'))) return;
-        rows.splice(i, 1);
-        break;
-    }
-    if (state.current >= rows.length) state.current = Math.max(0, rows.length - 1);
-    rowsEdited = true;
-    state.editedFile = state.readyFile || 'el'; // bu hutbede elle düzeltme var: otomatik güncelleme silmesin
-    renderRows();
-    commit();
+  $('#rowsTable').addEventListener('focusout', (e) => { if (e.target.matches('textarea[data-code]')) closeEdit(); });
+  $('#btnUndo').onclick = () => {
+    closeEdit();
+    if (!hist.past.length) return;
+    hist.future.push(JSON.stringify(state.rows));
+    restore(hist.past.pop());
+    toast('Son değişiklik geri alındı');
+  };
+  $('#btnRedo').onclick = () => {
+    closeEdit();
+    if (!hist.future.length) return;
+    hist.past.push(JSON.stringify(state.rows));
+    restore(hist.future.pop());
+    toast('Değişiklik yeniden yapıldı');
+  };
+  // Klavye: Ctrl+Z / Ctrl+Y (hücrenin dışındayken; hücre içinde tarayıcının kendi geri alması çalışır)
+  window.addEventListener('keydown', (e) => {
+    if ($('#tab-texts').hidden || !(e.ctrlKey || e.metaKey) || /TEXTAREA|INPUT/.test(document.activeElement?.tagName)) return;
+    const k = e.key.toLowerCase();
+    if (k === 'z' && !e.shiftKey) { e.preventDefault(); $('#btnUndo').click(); }
+    if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); $('#btnRedo').click(); }
   });
 
   // ---------- Ayarlar ----------
