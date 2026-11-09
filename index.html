@@ -218,6 +218,8 @@ table.langs .badge { font-size: 11px; font-weight: 600; text-transform: uppercas
 #rowsTable th .lock, #rowsTable th .edit { font-size: 10px; letter-spacing: .06em; padding: 1px 6px; border-radius: 999px; margin-left: 4px; vertical-align: 1px; }
 #rowsTable th .lock { background: var(--hover); color: var(--muted); }
 #rowsTable th .edit { background: color-mix(in srgb, var(--live) 14%, transparent); color: var(--live); }
+
+.arch-label { font-size: 13px; font-weight: 600; color: var(--muted); }
 </style>
 </head>
 <body>
@@ -274,12 +276,12 @@ table.langs .badge { font-size: 11px; font-weight: 600; text-transform: uppercas
         <p>Her satır ekranda birlikte gösterilen cümlelerdir. Türkçe, Arapça ve İngilizce Diyanet'in metnidir ve değiştirilemez. Moğolcayı hücreye tıklayıp düzeltebilirsiniz; değişiklik kendiliğinden kaydedilir.</p>
       </div>
       <div class="actions">
-        <label class="sr" for="readyList">Hazır hutbe</label>
+        <label for="readyList" class="arch-label">Hutbe arşivi</label>
         <select id="readyList"></select>
         <button id="btnUndo" class="ghost" disabled title="Son değişikliği geri al (Ctrl+Z)">↶ Geri al</button>
         <button id="btnRedo" class="ghost" disabled title="Geri alınanı yeniden yap (Ctrl+Y)">↷ İleri al</button>
-        <button id="btnReady" class="primary">Yükle</button>
-        <button id="btnNew" class="ghost">Yeni hutbe gir</button>
+        <button id="btnReady" class="primary" title="Listeden seçilen hutbeyi ekrana getirir">Ekrana getir</button>
+        <button id="btnNew" class="ghost" title="Arşivde olmayan bir hutbeyi PDF ya da metinle elle eklemek için">Elle hutbe ekle</button>
       </div>
     </div>
 
@@ -706,8 +708,9 @@ window.DISPLAY_HTML = "<!doctype html>\n<html lang=\"tr\">\n<head>\n<meta charse
       this.onProgress(this.current, 0);
     }
 
-    addFinal(text) { this.final.push(...normalizeWords(text)); this.interim = []; this._evaluate(); }
-    setInterim(text) { this.interim = normalizeWords(text); this._evaluate(); }
+    // finalized: ses tanıma bir parçayı kesinleştirdi, yani imam kısa bir duraklama yaptı
+    addFinal(text) { this.final.push(...normalizeWords(text)); this.interim = []; this.finalized = true; this._evaluate(); }
+    setInterim(text) { this.interim = normalizeWords(text); this.finalized = this.interim.length === 0 && this.finalized; this._evaluate(); }
     // Tanıma oturumu yeniden başlarken
     resetInterim() { this.interim = []; }
 
@@ -774,11 +777,18 @@ window.DISPLAY_HTML = "<!doctype html>\n<html lang=\"tr\">\n<head>\n<meta charse
         const progress = (this.skip + p) / full.length;
         this.onProgress(this.current, progress, this.skip + p);
 
-        // 1) Cümle sonuna gelindi
-        const tail = words.length <= 4 ? 0 : 1;
+        // 1) Cümle sonuna gelindi: SON KELİME duyulmalı. (Önceden sondan bir önceki kelime yetiyordu;
+        //    imam hızlanınca ekran son kelime söylenmeden sonraki cümleye atlıyordu.)
+        const tail = 0;
         // Kısa hitaplar ("Kıymetli Müslümanlar!") söylenirken ekranda görünsün: imam sonraki kelimeye geçince ilerle
         const shortWait = full.length <= 4 && seg.length - 1 - lastMatchAt < 1;
         if (p >= words.length - tail && matched / words.length >= 0.5 && !shortWait) {
+          if (this._advance(1, this.startIdx + lastMatchAt + 1)) continue;
+          return;
+        }
+        // 1a) Son kelime yanlış anlaşıldı ama imam durakladı (ses tanıma parçayı kesinleştirdi): cümle bitti
+        //     Son kelimenin yerinde bir şey duyulmuş olmalı: imam son kelimeden önce nefes alırsa erken geçilmesin
+        if (this.finalized && !this.interim.length && words.length > 4 && p >= words.length - 1 && matched / words.length >= 0.6 && seg.length - 1 - lastMatchAt >= 1) {
           if (this._advance(1, this.startIdx + lastMatchAt + 1)) continue;
           return;
         }
@@ -1377,6 +1387,51 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
 
   // ---------- Hazır hutbeler ----------
 
+  // ---------- Düzeltme arşivi ----------
+  // Moğolca/Kazakça (Diyanet dışı dillerde) elle yapılan düzeltmeler her hutbe için ayrı saklanır.
+  // Hutbe yeniden yüklense, güncellense ya da arşivden tekrar açılsa da düzeltmeler geri uygulanır.
+  const FIX_KEY = 'hutbe-ekran.duzeltmeler';
+  function loadFixes() { try { return JSON.parse(localStorage.getItem(FIX_KEY) || '{}') || {}; } catch (e) { return {}; } }
+  function saveFixes(all) { try { localStorage.setItem(FIX_KEY, JSON.stringify(all)); } catch (e) { /* yer yok */ } }
+  const readyOf = (file) => READY.find((h) => h.file === file);
+  // Şu anki tablo ile hazır hutbenin aslı arasındaki farkları (yalnızca düzenlenebilir dillerde) kaydet
+  function syncFixes() {
+    const h = readyOf(state.readyFile);
+    if (!h) return;
+    const tl = state.trackLang;
+    const orig = new Map(h.data.rows.map((r) => [r[tl], r]));
+    const fx = {};
+    state.rows.forEach((r) => {
+      const o = orig.get(r[tl]) || {};
+      for (const l of state.languages) {
+        if (locked(l.code)) continue;
+        const v = r[l.code] || '';
+        if (v && v !== (o[l.code] || '')) (fx[l.code] = fx[l.code] || {})[r[tl]] = v;
+      }
+    });
+    const all = loadFixes();
+    if (Object.keys(fx).length) all[state.readyFile] = fx; else delete all[state.readyFile];
+    saveFixes(all);
+  }
+  function applyFixes(file) {
+    const fx = loadFixes()[file];
+    if (!fx) return 0;
+    let n = 0;
+    state.rows.forEach((r) => {
+      for (const code of Object.keys(fx)) {
+        const v = fx[code][r[state.trackLang]];
+        if (v !== undefined && !locked(code)) { r[code] = v; n++; }
+      }
+    });
+    return n;
+  }
+  // Hazır hutbede dolu olup tabloda boş kalan hücre var mı (ör. sonradan eklenen Kazakça)
+  function hasMissing(h) {
+    const tl = state.trackLang;
+    const cur = new Map(state.rows.map((r) => [r[tl], r]));
+    return h.data.rows.some((r) => Object.keys(r).some((k) => r[k] && !((cur.get(r[tl]) || {})[k])));
+  }
+
   function loadReady(idx) {
     const h = HutbeState.clone(READY[idx].data);
     for (const code of Object.keys(h.sources)) {
@@ -1389,7 +1444,7 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
     state.current = 0;
     state.readyFile = READY[idx].file;
     state.readySig = sig(READY[idx]);
-    state.editedFile = null;
+    state.editedFile = applyFixes(READY[idx].file) ? READY[idx].file : null; // kayıtlı düzeltmeleri geri uygula
     commit();
     resetHistory();
     return h;
@@ -1414,23 +1469,22 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
     if (listening) return;
     if (state.readyFile === READY[0].file) {
       // Aynı hutbenin düzeltilmiş hali: hutbe henüz başlamadıysa (ilk cümle/açılış) güncel metni yükle
-      if (!state.readySig) { state.readySig = sig(READY[0]); persist(); return; }
-      if (state.readySig === sig(READY[0]) || state.current > 0) return;
-      if (state.editedFile === state.readyFile) {
-        // Elle yapılmış düzeltmeler (ör. Moğolca) silinmesin: güncellemeyi uygulama, bir kez haber ver
-        state.readySig = sig(READY[0]);
-        persist();
-        toast('Diyanet bu hutbenin metnini güncelledi. Sizin elle yaptığınız düzeltmeler korunsun diye uygulanmadı. İsterseniz Metinler > Yükle ile alabilirsiniz.');
-        return;
-      }
+      // Aynı hutbenin güncellenmiş hali ya da yeni eklenen bir dil (ör. Kazakça).
+      // Hutbe başlamadıysa yeniden yükle; elle yapılan düzeltmeler arşivden geri uygulanır, silinmez.
+      const changed = state.readySig !== sig(READY[0]) || hasMissing(READY[0]);
+      if (!changed || state.current > 0) return;
+      syncFixes();
       loadReady(0);
       setSplash(true);
       renderLive();
       if (!$('#tab-texts').hidden) { renderSources(); renderRows(); }
-      toast(`Hutbe metni güncellendi: ${READY[0].date} · ${READY[0].title}`);
+      toast(`Hutbe güncellendi: ${READY[0].date} · ${READY[0].title}` + (state.editedFile ? ' (düzeltmeleriniz korundu)' : ''));
       return;
     }
+    if (state.pinnedNewest === READY[0].file) return; // kullanıcı arşivden eski bir hutbe açtı
+    syncFixes();
     loadReady(0);
+    state.pinnedNewest = null;
     setSplash(true);
     renderLive();
     if (!$('#tab-texts').hidden) { renderSources(); renderRows(); }
@@ -1464,11 +1518,14 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
   $('#btnReady').onclick = async () => {
     const f = $('#readyList').value;
     if (f === '') return;
-    if (state.rows.length && !(await ask('Şu anki hutbenin yerine seçilen hutbe yüklenecek. Tablodaki düzeltmeleriniz silinir.', 'Yükle'))) return;
+    if (state.rows.length && !(await ask(`${READY[+f].date} · ${READY[+f].title} hutbesi ekrana getirilecek. Moğolca/Kazakça düzeltmeleriniz kayıtlı, kaybolmaz.`, 'Ekrana getir'))) return;
+    syncFixes();
     const h = loadReady(+f);
+    state.pinnedNewest = +f === 0 ? null : READY[0].file; // eski hutbe açıldıysa en yeniye kendiliğinden dönme
+    persist();
     renderSources(); renderRows(); renderLive();
     info(`${h.rows.length} satır yüklendi.` + (h.note ? ' ' + h.note : ''));
-    toast('Hutbe yüklendi');
+    toast(`${READY[+f].date} · ${READY[+f].title} ekranda`);
   };
 
   function info(text) { const n = $('#alignInfo'); n.textContent = text; n.hidden = !text; }
@@ -1477,7 +1534,7 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
   $('#btnNew').onclick = () => {
     const p = $('#newPanel');
     p.hidden = !p.hidden;
-    $('#btnNew').textContent = p.hidden ? 'Yeni hutbe gir' : 'Paneli kapat';
+    $('#btnNew').textContent = p.hidden ? 'Elle hutbe ekle' : 'Paneli kapat';
     if (!p.hidden) renderSources();
   };
 
@@ -1645,6 +1702,7 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
     state.editedFile = state.readyFile || 'el';
     renderRows();
     commit();
+    syncFixes();
     updateHistBtns();
   }
   $('#rowsTable').addEventListener('input', (e) => {
@@ -1656,6 +1714,7 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
     rowsEdited = true;
     state.editedFile = state.readyFile || 'el'; // bu hutbede elle düzeltme var: otomatik güncelleme silmesin
     commit();
+    syncFixes();
     $('#btnUndo').disabled = false;
     // Adımlar kelime kelime: boşluk/noktalama yazılınca ya da yazmaya kısa ara verilince bir adım kapanır,
     // böylece Geri al bütün hücreyi değil yalnızca son kelimeyi geri alır
