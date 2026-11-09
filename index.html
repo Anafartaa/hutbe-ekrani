@@ -336,15 +336,6 @@ table.langs .badge { font-size: 11px; font-weight: 600; text-transform: uppercas
         </form>
       </div>
 
-      <div class="group">
-        <h3>Dosya</h3>
-        <p class="muted">Hazırladığınız hutbeyi dosyaya kaydedip başka bilgisayarda açabilirsiniz.</p>
-        <div class="btn-row">
-          <button id="btnExport" class="ghost">Dışa aktar</button>
-          <label class="btn ghost" for="fileImport">İçe aktar</label>
-          <input type="file" id="fileImport" accept=".json,application/json" class="sr">
-        </div>
-      </div>
     </div>
   </section>
 </main>
@@ -1854,27 +1845,6 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
     commit();
     toast(name + ' eklendi. Metinler bölümünden bu dilin metnini girin.');
   });
-
-  $('#btnExport').onclick = () => {
-    const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'hutbe-' + new Date().toISOString().slice(0, 10) + '.json';
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-  };
-  $('#fileImport').onchange = (e) => {
-    const f = e.target.files[0];
-    if (!f) return;
-    f.text().then((t) => {
-      try {
-        state = Object.assign(HutbeState.clone(HutbeState.DEFAULT), JSON.parse(t));
-        renderSettings(); commit(); renderLive();
-        toast('Hutbe dosyası yüklendi');
-      } catch (err) { toast('Dosya okunamadı: ' + err.message); }
-    });
-    e.target.value = '';
-  };
 
   // ---------- Telefon kumandası için (js/kumanda-host.js kullanır) ----------
   window.HutbeApp = {
