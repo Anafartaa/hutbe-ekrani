@@ -1351,9 +1351,6 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
   $('#btnListen').onclick = () => (listening ? stopListening() : startListening());
 
   // ---------- Hazır hutbeler ----------
-  $('#readyList').innerHTML = READY.length
-    ? READY.map((h, i) => `<option value="${i}">${esc(h.date)} · ${esc(h.title)}</option>`).join('')
-    : '<option value="">Hazır hutbe yok</option>';
 
   function loadReady(idx) {
     const h = HutbeState.clone(READY[idx].data);
@@ -1370,22 +1367,45 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
   }
 
   // Siteye bu haftanın hutbesi eklendiyse, tarayıcıda kayıtlı eski hutbede kalınmasın
-  async function offerNewest() {
+  // En yeni hazır hutbe kendiliğinden yüklenir (sorulmaz). Hutbe okunurken (dinleme açıkken) dokunulmaz.
+  function offerNewest() {
     if (!READY.length || !state.rows.length) return;
     if (!state.readyFile) { // eski sürümden kalan kayıt: hangi hazır hutbe olduğunu metinden bul
       const first = state.rows[0] && state.rows[0][state.trackLang];
       const hit = READY.find((h) => h.data.rows[0] && h.data.rows[0][state.trackLang] === first);
       if (hit) { state.readyFile = hit.file; persist(); }
     }
-    if (state.readyFile === READY[0].file) return;
-    if (!(await ask(`Yeni hutbe hazır: ${READY[0].date} · ${READY[0].title}. Şu an açık olan hutbenin yerine yüklensin mi?`, 'Yükle'))) {
-      state.readyFile = READY[0].file; persist(); // bir kez sorulur
-      return;
-    }
+    if (state.readyFile === READY[0].file || listening) return;
     loadReady(0);
+    setSplash(true);
     renderLive();
-    toast('Yeni hutbe yüklendi');
+    if (!$('#tab-texts').hidden) { renderSources(); renderRows(); }
+    toast(`Yeni hutbe yüklendi: ${READY[0].date} · ${READY[0].title}`);
   }
+
+  // Sayfa günlerce açık kalabilir: sitedeki hutbe listesini ara ara kontrol et, yeni hutbe gelince
+  // sayfayı yenilemeden yükle (yenileme projeksiyon penceresiyle bağlantıyı koparırdı).
+  function renderReadyList() {
+    $('#readyList').innerHTML = READY.length
+      ? READY.map((h, i) => `<option value="${i}">${esc(h.date)} · ${esc(h.title)}</option>`).join('')
+      : '<option value="">Hazır hutbe yok</option>';
+  }
+  async function checkSiteForNew() {
+    if (!/^https?:$/.test(location.protocol) || listening) return;
+    try {
+      const html = await (await fetch(location.href.split('#')[0], { cache: 'no-store' })).text();
+      const m = html.match(/window\.HAZIR_HUTBELER = (\[[\s\S]*?\]);\s*(?:<\/script>|\n)/);
+      if (!m) return;
+      const list = JSON.parse(m[1]);
+      if (!Array.isArray(list) || !list.length || !list[0].data || (READY[0] && list[0].file === READY[0].file)) return;
+      READY.splice(0, READY.length, ...list);
+      renderReadyList();
+      offerNewest();
+    } catch (e) { /* internet yok: sonra yine denenir */ }
+  }
+  setInterval(checkSiteForNew, 15 * 60 * 1000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkSiteForNew(); });
+
 
   $('#btnReady').onclick = async () => {
     const f = $('#readyList').value;
@@ -1742,6 +1762,7 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
   syncTracker();
   renderLive();
   scalePreview();
+  renderReadyList();
   offerNewest();
 })();
 </script>
