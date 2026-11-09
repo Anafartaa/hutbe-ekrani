@@ -1645,10 +1645,15 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
     $('#btnUndo').disabled = false;
     // Adımlar kelime kelime: boşluk/noktalama yazılınca ya da yazmaya kısa ara verilince bir adım kapanır,
     // böylece Geri al bütün hücreyi değil yalnızca son kelimeyi geri alır
+    // Klavyenin bildirdiği tuşa güvenme (Türkçe/Moğolca klavyeler, otomatik düzeltme ve harf birleştirme
+    // bunu boş gönderebilir): imlecin hemen solundaki karaktere bak
     clearTimeout(idleTimer);
-    if (e.data && /[\s.,!?;:]/.test(e.data)) closeEdit();
+    const before = t.value.charAt((t.selectionStart || 0) - 1);
+    if (!e.isComposing && /[\s.,!?;:]/.test(before)) closeEdit();
     else idleTimer = setTimeout(closeEdit, 900);
   });
+  // Harf birleştirme (ör. telefon klavyesi) bitince de adımı kapatmaya hazırla
+  $('#rowsTable').addEventListener('compositionend', () => { clearTimeout(idleTimer); idleTimer = setTimeout(closeEdit, 600); });
   let idleTimer = null;
   $('#rowsTable').addEventListener('focusout', (e) => { if (e.target.matches('textarea[data-code]')) closeEdit(); });
   $('#btnUndo').onclick = () => {
