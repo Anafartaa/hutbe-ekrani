@@ -1310,6 +1310,8 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
     try { rec && rec.stop(); } catch (err) { /* yok say */ }
     releaseMic();
     setMic('Mikrofon kapalı', 'off');
+    // Hutbe sırasında yeni/düzeltilmiş hutbe geldiyse dinleme biter bitmez kontrol et ve yükle
+    setTimeout(() => { offerNewest(); checkSiteForNew(); }, 0);
     updateListenBtn();
     releaseAwake();
   }
