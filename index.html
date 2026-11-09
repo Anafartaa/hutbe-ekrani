@@ -210,6 +210,14 @@ table.langs .badge { font-size: 11px; font-weight: 600; text-transform: uppercas
 .qr img, .qr svg { width: 240px; height: 240px; image-rendering: pixelated; }
 .remote-link { display: flex; gap: 8px; }
 .remote-link input { flex: 1; font-size: 13px; }
+
+/* Diyanet dilleri salt okunur */
+#rowsTable td.locked { background: color-mix(in srgb, var(--hover) 55%, transparent); }
+#rowsTable td.locked .cell { padding: 6px 8px; font: 14px/1.45 var(--text); color: var(--fg); white-space: pre-wrap; }
+#rowsTable td.locked .cell[dir=rtl] { font-family: var(--arabic); font-size: 18px; }
+#rowsTable th .lock, #rowsTable th .edit { font-size: 10px; letter-spacing: .06em; padding: 1px 6px; border-radius: 999px; margin-left: 4px; vertical-align: 1px; }
+#rowsTable th .lock { background: var(--hover); color: var(--muted); }
+#rowsTable th .edit { background: color-mix(in srgb, var(--live) 14%, transparent); color: var(--live); }
 </style>
 </head>
 <body>
@@ -263,7 +271,7 @@ table.langs .badge { font-size: 11px; font-weight: 600; text-transform: uppercas
     <div class="section-head">
       <div>
         <h2>Metinler ve eşleme</h2>
-        <p>Her satır ekranda birlikte gösterilen cümlelerdir. Bir hücreye tıklayıp metni düzeltebilirsiniz.</p>
+        <p>Her satır ekranda birlikte gösterilen cümlelerdir. Türkçe, Arapça ve İngilizce Diyanet'in metnidir ve değiştirilemez. Moğolcayı hücreye tıklayıp düzeltebilirsiniz; değişiklik kendiliğinden kaydedilir.</p>
       </div>
       <div class="actions">
         <label class="sr" for="readyList">Hazır hutbe</label>
@@ -1580,28 +1588,31 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
     renderSources();
   };
 
+  // Diyanet'in yayınladığı diller değiştirilemez (Diyanet zaten kontrol ediyor; yanlışlıkla bozulmasın).
+  // Yalnızca Diyanet'in yayınlamadığı diller (Moğolca vb.) düzenlenebilir.
+  const DIYANET = new Set(['tr', 'ar', 'en']);
+  const locked = (code) => DIYANET.has(code);
   function renderRows() {
     const langs = state.languages;
-    const head = '<tr><th>#</th>' + langs.map((l) => `<th>${esc(l.name)}</th>`).join('') + '<th><span class="sr">Satır işlemleri</span></th></tr>';
+    const head = '<tr><th>#</th>' + langs.map((l) => `<th>${esc(l.name)}${locked(l.code) ? ' <span class="lock" title="Diyanet metni, değiştirilemez">Diyanet</span>' : ' <span class="edit">düzenlenebilir</span>'}</th>`).join('') + '</tr>';
     const body = state.rows.map((r, i) => '<tr>' +
       `<td class="idx">${i + 1}</td>` +
-      langs.map((l) => `<td><textarea id="cell-${i}-${esc(l.code)}" data-i="${i}" data-code="${esc(l.code)}" dir="${l.dir}" class="${r[l.code] ? '' : 'empty'}" aria-label="${i + 1}. satır, ${esc(l.name)}">${esc(r[l.code] || '')}</textarea>
+      langs.map((l) => locked(l.code)
+        ? `<td class="locked"><div class="cell" dir="${l.dir}" lang="${esc(l.code)}">${esc(r[l.code] || '') || '<i class="muted">—</i>'}</div></td>`
+        : `<td><textarea id="cell-${i}-${esc(l.code)}" data-i="${i}" data-code="${esc(l.code)}" dir="${l.dir}" class="${r[l.code] ? '' : 'empty'}" aria-label="${i + 1}. satır, ${esc(l.name)}">${esc(r[l.code] || '')}</textarea>
         <div class="tools">
           <button data-op="pull" data-i="${i}" data-code="${esc(l.code)}" title="Alt satırın ilk cümlesini bu hücreye al">Alttan al</button>
           <button data-op="push" data-i="${i}" data-code="${esc(l.code)}" title="Bu hücrenin son cümlesini alt satıra gönder">Aşağı gönder</button>
         </div></td>`).join('') +
-      `<td class="rowtools"><div class="tools">
-        <button data-op="merge" data-i="${i}" title="Alt satırla birleştir">Birleştir</button>
-        <button data-op="insert" data-i="${i}" title="Altına boş satır ekle">Satır ekle</button>
-        <button data-op="delete" data-i="${i}" class="del" title="Satırı sil">Sil</button>
-      </div></td></tr>`).join('');
+      '</tr>').join('');
     $('#rowsTable').innerHTML = '<thead>' + head + '</thead><tbody>' +
-      (body || `<tr><td colspan="${langs.length + 2}" class="muted" style="padding:20px">Henüz satır yok. Hazır bir hutbe yükleyin veya yeni hutbe girin.</td></tr>`) + '</tbody>';
+      (body || `<tr><td colspan="${langs.length + 1}" class="muted" style="padding:20px">Henüz satır yok. Hazır bir hutbe yükleyin veya yeni hutbe girin.</td></tr>`) + '</tbody>';
   }
+
 
   $('#rowsTable').addEventListener('input', (e) => {
     const t = e.target.closest('textarea[data-code]');
-    if (!t) return;
+    if (!t || locked(t.dataset.code)) return;
     state.rows[+t.dataset.i][t.dataset.code] = t.value;
     t.classList.toggle('empty', !t.value);
     rowsEdited = true;
@@ -1613,6 +1624,7 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
     const b = e.target.closest('button[data-op]');
     if (!b) return;
     const i = +b.dataset.i, code = b.dataset.code, rows = state.rows;
+    if (!code || locked(code)) return; // satır birleştirme/silme ve Diyanet dillerinde kaydırma kapalı
     const split = (s) => HutbeAlign.splitSentences(s || '');
     switch (b.dataset.op) {
       case 'pull': {
