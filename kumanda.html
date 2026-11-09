@@ -127,7 +127,7 @@
 </section>
 
 <main class="wrap">
-  <p class="empty" id="noRoom" hidden>Bu sayfa, bilgisayardaki <b>Telefon kumandası</b> düğmesinin gösterdiği QR kod okutularak açılmalı.</p>
+  <p class="empty" id="noRoom" hidden>Bu bağlantı eksik ya da eski. Bilgisayarda <b>Telefon kumandası</b> düğmesine basıp çıkan QR kodu yeniden okutun.</p>
 
   <div class="nav">
     <button id="bPrev" aria-label="Önceki"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Geri</button>
@@ -170,6 +170,7 @@
   const BROKERS = (window.HUTBE_KUMANDA_CFG && window.HUTBE_KUMANDA_CFG.brokers) || ['wss://broker.hivemq.com:8884/mqtt', 'wss://broker.emqx.io:8084/mqtt'];
   const hash = new URLSearchParams(location.hash.slice(1));
   const room = hash.get('r') || '';
+  const secret = hash.get('k') || '';
   const broker = BROKERS[Math.min(+hash.get('b') || 0, BROKERS.length - 1)];
   const controls = () => document.querySelectorAll('#bPrev, #bNext, #bListen, .seg button, #bBlank, #bFirst');
 
@@ -184,7 +185,7 @@
   function conn(text, s) { $('#connText').textContent = text; $('#conn').dataset.s = s; }
   function enable(on) { controls().forEach((b) => { b.disabled = !on; }); }
 
-  if (!/^[a-z0-9]{12,}$/.test(room)) {
+  if (!/^[a-z0-9]{12,}$/.test(room) || !/^[a-z0-9]{20,}$/.test(secret)) {
     $('#noRoom').hidden = false;
     conn('Kod yok', 'err');
     $('#title').textContent = 'QR kodu okutun';
@@ -225,10 +226,23 @@
   setInterval(beat, 8000);
   setInterval(render, 3000);
 
+  // Her komut, QR koddaki gizli anahtarla imzalanır (anahtar hiçbir zaman gönderilmez)
+  let keyP = null;
+  const hex = (buf) => Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, '0')).join('');
+  function signKey() {
+    if (!keyP) keyP = crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    return keyP;
+  }
+  let outQ = Promise.resolve();
   function send(cmd, extra, quiet) {
     if (!client || !connected) { if (!quiet) toast('Bağlantı yok, yeniden bağlanıyor…'); return false; }
-    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-    client.publish(base + 'cmd', JSON.stringify(Object.assign({ cmd, id }, extra || {})));
+    if (!window.crypto || !crypto.subtle) { if (!quiet) toast('Bu tarayıcı güvenli bağlantıyı desteklemiyor.'); return false; }
+    const d = Object.assign({ cmd, id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7), t: Date.now() }, extra || {});
+    const text = [d.cmd, d.id, d.t, d.i === undefined ? '' : d.i, d.on === undefined ? '' : d.on].join('|');
+    // sırayla gönder: art arda basılan İleri'ler karışmasın
+    outQ = outQ.then(() => signKey()).then((k) => crypto.subtle.sign('HMAC', k, new TextEncoder().encode(text)))
+      .then((sig) => { d.sig = hex(sig); if (client && connected) client.publish(base + 'cmd', JSON.stringify(d)); })
+      .catch(() => {});
     if (!quiet && navigator.vibrate) navigator.vibrate(12);
     return true;
   }
@@ -246,11 +260,11 @@
   const last = () => Math.max(0, (st && st.total | 0) - 1);
   function doNext() {
     if (!send('next')) return;
-    predict((s) => { if (s.blank) return; if (s.splash) s.splash = false; else if (s.cur >= last()) s.ending = true; else s.cur++; });
+    predict((s) => { if (s.splash) s.splash = false; else if (s.ending) return; else if (s.cur >= last()) s.ending = true; else s.cur++; });
   }
   function doPrev() {
     if (!send('prev')) return;
-    predict((s) => { if (s.blank) return; if (s.ending) s.ending = false; else if (s.splash) return; else if (s.cur <= 0) s.splash = true; else s.cur--; });
+    predict((s) => { if (s.ending) s.ending = false; else if (s.splash) return; else if (s.cur <= 0) s.splash = true; else s.cur--; });
   }
   function doGo(i) {
     if (!send('go', { i })) return;

@@ -1094,10 +1094,18 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
     const n = Math.round(progress * ws.length);
     ws.forEach((w, k) => w.classList.toggle('hit', k < n));
     // Son cümlenin neredeyse tamamı duyuldu: 4 sn sonra kapanış ekranı
-    if (listening && i === state.rows.length - 1 && i === state.current && progress >= 0.85 && !state.ending && !endTimer) {
-      endTimer = setTimeout(() => { endTimer = null; if (listening && state.current === state.rows.length - 1) setEnding(true); }, 4000);
+    if (listening && i === state.rows.length - 1 && i === state.current && progress >= 0.85 && !state.ending && !endArmedAt) {
+      endArmedAt = Date.now();
+      endTimer = setTimeout(checkEnd, 4000);
     }
   }
+  // Zamanlayıcı arka planda gecikebilir; bu yüzden ses tanımanın her sinyalinde de süre dolmuş mu bakılır
+  function checkEnd() {
+    if (!endArmedAt || Date.now() - endArmedAt < 4000) return;
+    disarmEnd();
+    if (listening && state.rows.length && state.current === state.rows.length - 1 && !state.ending) setEnding(true);
+  }
+  function disarmEnd() { clearTimeout(endTimer); endTimer = null; endArmedAt = 0; }
 
   // ---------- Açılış ekranı ----------
   // Projeksiyon açılış görseliyle başlar; imam (Arapça duayla) konuşmaya başlayınca hutbe ekranına geçer.
@@ -1108,7 +1116,7 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
     if (on) state[key === 'splash' ? 'ending' : 'splash'] = false;
     $('#btnSplash').setAttribute('aria-pressed', String(!!state.splash));
     $('#btnEnding').setAttribute('aria-pressed', String(!!state.ending));
-    if (!state.ending) clearTimeout(endTimer);
+    disarmEnd();
     persist();
     broadcast();
   }
@@ -1116,6 +1124,7 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
   // Kapanış: hutbenin son ayeti/hadisi ve "Hayırlı Cumalar". Son cümle okununca birkaç saniye sonra kendiliğinden gelir.
   const setEnding = (on) => setScreen('ending', on);
   let endTimer = null;
+  let endArmedAt = 0;
   $('#btnSplash').onclick = () => setSplash(!state.splash);
   $('#btnEnding').onclick = () => setEnding(!state.ending);
   // Ekranı karart: projeksiyon simsiyah olur (ör. hutbe öncesi/sonrası), hutbe yerinde kalır
@@ -1132,7 +1141,7 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
     if (!state.rows.length) return;
     if (state.splash) setSplash(false);
     if (state.ending) setEnding(false);
-    clearTimeout(endTimer); endTimer = null;
+    disarmEnd();
     i = Math.max(0, Math.min(i, state.rows.length - 1));
     state.current = i;
     if (!fromTracker) tracker.goto(i);
@@ -1237,6 +1246,7 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
     // Hata sonrası tanıma kendiliğinden yeniden başlayınca "Ses tanıma hatası" yazısı takılı kalmasın
     rec.onstart = () => { if (listening) setMic('Dinleniyor', 'on'); };
     rec.onresult = (e) => {
+      checkEnd();
       failures = 0;
       if (listening) setMic('Dinleniyor', 'on');
       let interim = '';
@@ -1277,6 +1287,7 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
       }
     };
     rec.onend = () => {
+      checkEnd();
       tracker.resetInterim();
       // Art arda hata olursa her seferinde biraz daha bekleyerek yeniden dene (en çok 5 sn)
       // Hata yoksa HEMEN yeniden başlat: Chrome arkadaki sayfaların zamanlayıcılarını dakikada bire kadar
@@ -1761,9 +1772,29 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
     return Array.from(bytes, (b) => abc[b % abc.length]).join('');
   }
   if (!saved.room || !/^[a-z0-9]{12,}$/.test(saved.room)) { saved.room = newRoom(); save(); }
+  // Gizli anahtar: yalnızca QR koddaki bağlantının # kısmında durur, sunucudan hiç geçmez.
+  // Telefon her komutu bununla imzalar; sunucuyu izleyen biri oda kodunu görse bile komut gönderemez.
+  if (!saved.key || !/^[a-z0-9]{20,}$/.test(saved.key)) { saved.key = newRoom() + newRoom(); save(); }
 
   const base = () => `hutbe-ekran/v1/${saved.room}/`;
-  const link = () => `${CFG.page}#r=${saved.room}&b=${saved.broker || 0}`;
+  const link = () => `${CFG.page}#r=${saved.room}&k=${saved.key}&b=${saved.broker || 0}`;
+
+  // Komut imzası (HMAC-SHA256). Telefon tarafı (kumanda.html) aynı metni imzalar.
+  const signText = (d) => [d.cmd, d.id, d.t, d.i === undefined ? '' : d.i, d.on === undefined ? '' : d.on].join('|');
+  let hmacKey = null, hmacFor = '';
+  async function keyObj() {
+    if (hmacFor !== saved.key) {
+      hmacKey = await crypto.subtle.importKey('raw', new TextEncoder().encode(saved.key), { name: 'HMAC', hash: 'SHA-256' }, false, ['verify']);
+      hmacFor = saved.key;
+    }
+    return hmacKey;
+  }
+  async function verified(d) {
+    if (typeof d.sig !== 'string' || !/^[0-9a-f]{64}$/.test(d.sig) || !Number.isFinite(d.t)) return false;
+    if (Math.abs(Date.now() - d.t) > 10 * 60 * 1000) return false; // eski bir komutun tekrar gönderilmesine karşı
+    const sig = new Uint8Array(d.sig.match(/../g).map((h) => parseInt(h, 16)));
+    try { return await crypto.subtle.verify('HMAC', await keyObj(), sig, new TextEncoder().encode(signText(d))); } catch (e) { return false; }
+  }
 
   const scripts = {};
   function loadScript(url) {
@@ -1845,9 +1876,18 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
     let d;
     try { d = JSON.parse(String(payload)); } catch (e) { return; }
     if (!d || typeof d.cmd !== 'string' || typeof d.id !== 'string' || d.id.length > 40) return;
+    // İmza kontrolü eşzamansız; komutlar geliş sırasıyla uygulansın diye kuyrukta sırayla işlenir
+    queue = queue.then(() => verified(d)).then((ok) => {
+      if (!ok) { rejected++; if (rejected === 1 || rejected % 20 === 0) console.warn('Kumanda: imzasız/yanlış komut reddedildi'); return; }
+      apply(d);
+    });
+  }
+  let queue = Promise.resolve();
+  let rejected = 0;
+  function apply(d) {
     if (seenIds.has(d.id)) return; // aynı komut iki kez gelirse bir kez uygula
     seenIds.add(d.id);
-    if (seenIds.size > 200) seenIds.delete(seenIds.values().next().value);
+    if (seenIds.size > 3000) seenIds.delete(seenIds.values().next().value);
     phoneSeen = Date.now();
     const on = d.on === true;
     switch (d.cmd) {
@@ -1862,7 +1902,7 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
       case 'ping': break;
       default: return;
     }
-    setTimeout(() => publish(true), 60);
+    publish(true);
   }
 
   // ---------- Durumu telefona gönder ----------
@@ -1966,6 +2006,7 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
   $('#remoteReset').onclick = () => {
     disconnect();
     saved.room = newRoom();
+    saved.key = newRoom() + newRoom();
     save();
     phoneSeen = 0;
     renderPanel();
