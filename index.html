@@ -1618,6 +1618,7 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
   }
   function resetHistory() { hist.past = []; hist.future = []; editBase = null; updateHistBtns(); }
   function closeEdit() {
+    clearTimeout(idleTimer);
     if (editBase === null) return;
     const now = JSON.stringify(state.rows);
     if (now !== editBase) { hist.past.push(editBase); if (hist.past.length > 100) hist.past.shift(); hist.future = []; }
@@ -1642,7 +1643,13 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
     state.editedFile = state.readyFile || 'el'; // bu hutbede elle düzeltme var: otomatik güncelleme silmesin
     commit();
     $('#btnUndo').disabled = false;
+    // Adımlar kelime kelime: boşluk/noktalama yazılınca ya da yazmaya kısa ara verilince bir adım kapanır,
+    // böylece Geri al bütün hücreyi değil yalnızca son kelimeyi geri alır
+    clearTimeout(idleTimer);
+    if (e.data && /[\s.,!?;:]/.test(e.data)) closeEdit();
+    else idleTimer = setTimeout(closeEdit, 900);
   });
+  let idleTimer = null;
   $('#rowsTable').addEventListener('focusout', (e) => { if (e.target.matches('textarea[data-code]')) closeEdit(); });
   $('#btnUndo').onclick = () => {
     closeEdit();
