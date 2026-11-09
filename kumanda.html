@@ -3,129 +3,162 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#173f42">
+<meta name="theme-color" content="#123336">
 <title>Hutbe Kumandası</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&family=Noto+Sans:wght@400;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700;800&family=Noto+Sans:wght@400;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 <style>
-  /* Telefonda tek elle kullanım: üstte okunan cümle, ortada büyük İleri/Geri, altta ekran düğmeleri ve cümle listesi */
+  /* Tek elle kullanım: üstte "şu an ekranda ne var", ortada büyük İleri/Geri, altta ekran seçimi, en altta dokunulabilir cümle listesi */
   :root {
-    --bar: #173f42; --bar-fg: #e8f0ee; --bg: #f3f5f3; --surface: #fff; --line: #dde3e0; --fg: #1b2526; --muted: #64716f;
-    --teal: #1f5f63; --brass: #b8913e; --live: #2f8a4c; --danger: #b4392f; --cur: #fbf4e3;
+    --bar: #123336; --bar-2: #1a4649; --bar-fg: #e9f2f0;
+    --bg: #eef1ef; --surface: #ffffff; --sunk: #f5f7f5; --line: #dbe2df; --fg: #18211f; --muted: #5f6d6a;
+    --teal: #1d5b5f; --teal-ink: #0f3b3e; --brass: #b08a3a; --brass-soft: #f6eedb; --live: #2b8a4b; --danger: #b3392f;
     --ui: 'Source Sans 3', 'Segoe UI', system-ui, sans-serif; --text: 'Noto Sans', 'Segoe UI', Arial, sans-serif;
+    --r: 16px;
   }
-  @media (prefers-color-scheme: dark) { :root { --bg: #0f1617; --surface: #182224; --line: #2a3739; --fg: #e4ecea; --muted: #93a3a1; --teal: #4fa3a6; --brass: #d4ad5c; --live: #56c27a; --danger: #e0685e; --cur: #2b2716; --bar: #0c1314; color-scheme: dark; } }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0d1415; --surface: #162022; --sunk: #111a1b; --line: #263335; --fg: #e5edeb; --muted: #93a29f;
+      --teal: #3f9ea2; --teal-ink: #9fd8da; --brass: #d6b061; --brass-soft: #2a2416; --live: #4fbf73; --danger: #e0675c; color-scheme: dark; }
+  }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   [hidden] { display: none !important; }
   html, body { margin: 0; }
-  body { background: var(--bg); color: var(--fg); font: 16px/1.45 var(--ui); padding-bottom: env(safe-area-inset-bottom, 0px); }
-  button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; }
+  body { background: var(--bg); color: var(--fg); font: 16px/1.45 var(--ui); padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); -webkit-user-select: none; user-select: none; }
+  button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; touch-action: manipulation; }
   :focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+  .wrap { padding-left: max(14px, env(safe-area-inset-left, 0px)); padding-right: max(14px, env(safe-area-inset-right, 0px)); max-width: 560px; margin: 0 auto; }
 
-  header { position: sticky; top: 0; z-index: 5; background: var(--bar); color: var(--bar-fg);
-    padding: calc(10px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) 10px max(16px, env(safe-area-inset-left, 0px));
-    display: flex; align-items: center; gap: 12px; }
-  header .t { flex: 1; min-width: 0; line-height: 1.2; }
-  header .t b { display: block; font-size: 15px; }
-  header .t span { font-size: 13px; opacity: .75; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .pill { font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: rgba(255,255,255,.1); white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
-  .pill::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; opacity: .6; }
-  .pill[data-s="on"] { background: rgba(86,194,122,.2); color: #b9f0c9; }
-  .pill[data-s="on"]::before { background: #56c27a; opacity: 1; }
-  .pill[data-s="err"] { background: rgba(224,104,94,.22); color: #ffd1cc; }
+  /* Üst bölüm: koyu zemin üstünde ekrandaki durum */
+  .top { background: linear-gradient(180deg, var(--bar) 0%, var(--bar-2) 100%); color: var(--bar-fg); padding-top: calc(12px + env(safe-area-inset-top, 0px)); padding-bottom: 18px; }
+  .hdr { display: flex; align-items: center; gap: 10px; }
+  .hdr .name { flex: 1; min-width: 0; }
+  .hdr .name small { display: block; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; opacity: .6; font-weight: 700; }
+  .hdr .name b { display: block; font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .conn { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; padding: 5px 10px; border-radius: 999px; background: rgba(255,255,255,.09); white-space: nowrap; }
+  .conn i { width: 8px; height: 8px; border-radius: 50%; background: #9aa; }
+  .conn[data-s="on"] i { background: #5fd38a; box-shadow: 0 0 0 3px rgba(95,211,138,.22); }
+  .conn[data-s="warn"] i { background: #e7b84f; }
+  .conn[data-s="err"] i { background: #f07a70; }
 
-  main { padding: 14px max(16px, env(safe-area-inset-right, 0px)) 24px max(16px, env(safe-area-inset-left, 0px)); display: grid; gap: 14px; max-width: 560px; margin: 0 auto; }
-  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
-  .k { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 700; }
-  .now { display: grid; gap: 8px; }
-  .now .row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-  .now .no { font-variant-numeric: tabular-nums; font-size: 15px; font-weight: 600; }
-  .now .no b { font-size: 22px; color: var(--brass); }
-  .now .cur { font: 600 19px/1.4 var(--text); min-height: 2.8em; }
-  .now .nxt { font: 14px/1.4 var(--text); color: var(--muted); border-top: 1px dashed var(--line); padding-top: 8px; }
-  .now .scr { font-size: 13px; font-weight: 700; color: var(--brass); }
+  .now { margin-top: 16px; display: grid; gap: 10px; }
+  .meta { display: flex; align-items: center; gap: 10px; }
+  .num { font-size: 34px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+  .num span { font-size: 18px; font-weight: 600; opacity: .55; }
+  .chip { margin-left: auto; font-size: 12px; font-weight: 700; letter-spacing: .04em; padding: 5px 10px; border-radius: 8px; background: rgba(255,255,255,.1); }
+  .chip[data-k="splash"], .chip[data-k="ending"] { background: rgba(214,176,97,.25); color: #f3dca6; }
+  .chip[data-k="blank"] { background: #000; color: #fff; box-shadow: 0 0 0 1px rgba(255,255,255,.25); }
+  .prog { height: 4px; border-radius: 4px; background: rgba(255,255,255,.12); overflow: hidden; }
+  .prog i { display: block; height: 100%; width: 0; background: var(--brass); border-radius: 4px; transition: width .3s ease; }
+  .cur { font: 600 19px/1.42 var(--text); min-height: 2.84em; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+  .nxt { font: 14px/1.4 var(--text); opacity: .68; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .nxt b { font: 700 11px var(--ui); letter-spacing: .1em; text-transform: uppercase; opacity: .8; margin-right: 6px; }
 
-  .nav { display: grid; grid-template-columns: 1fr 1.4fr; gap: 10px; }
-  .nav button { height: 108px; border-radius: 16px; font-size: 20px; font-weight: 700; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+  main { display: grid; gap: 12px; margin-top: -2px; padding-top: 14px; }
+
+  .nav { display: grid; grid-template-columns: 1fr 1.5fr; gap: 10px; }
+  .nav button { height: 104px; border-radius: var(--r); font-size: 19px; font-weight: 800; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; transition: transform .08s ease; }
+  .nav button:active { transform: scale(.97); }
   .nav svg { width: 30px; height: 30px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
   #bPrev { background: var(--surface); border: 1px solid var(--line); }
-  #bNext { background: var(--teal); color: #fff; }
-  .nav button:active { transform: scale(.98); }
+  #bNext { background: var(--teal); color: #fff; box-shadow: 0 8px 20px -12px var(--teal); }
 
-  .mic { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; }
-  .mic .st { font-weight: 600; }
-  .mic .heard { grid-column: 1 / -1; font-size: 13px; color: var(--muted); font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-height: 1.3em; }
-  #bListen { height: 48px; padding: 0 18px; border-radius: 999px; background: var(--live); color: #fff; font-weight: 700; display: inline-flex; align-items: center; gap: 8px; }
-  #bListen[data-on="true"] { background: var(--danger); }
-  #bListen::before { content: ''; width: 9px; height: 9px; border-radius: 50%; background: #fff; }
-  #bListen[data-on="true"]::before { border-radius: 2px; }
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 12px; display: grid; gap: 10px; }
+  .lbl { font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
 
-  .screens { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-  .screens button, .wide { min-height: 52px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); font-weight: 600; font-size: 15px; padding: 6px; }
-  .screens button[aria-pressed="true"] { border-color: var(--brass); background: color-mix(in srgb, var(--brass) 20%, var(--surface)); }
+  .mic { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; }
+  .mic .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--line); }
+  .mic[data-on="true"] .dot { background: var(--live); box-shadow: 0 0 0 4px color-mix(in srgb, var(--live) 22%, transparent); animation: pulse 1.6s infinite; }
+  .mic[data-err="true"] .dot { background: var(--danger); animation: none; }
+  @keyframes pulse { 50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--live) 8%, transparent); } }
+  @media (prefers-reduced-motion: reduce) { .mic .dot { animation: none !important; } .prog i { transition: none; } }
+  .mic .st b { display: block; font-size: 16px; }
+  .mic .st span { display: block; font-size: 13px; color: var(--muted); font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+  .mic .st { min-width: 0; }
+  #bListen { height: 44px; padding: 0 16px; border-radius: 12px; font-weight: 800; font-size: 15px; background: var(--live); color: #fff; }
+  #bListen[data-on="true"] { background: color-mix(in srgb, var(--danger) 12%, var(--surface)); color: var(--danger); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 40%, transparent); }
+
+  .screen { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+  .seg { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--sunk); border: 1px solid var(--line); border-radius: 12px; padding: 3px; gap: 3px; }
+  .seg button { min-height: 44px; border-radius: 9px; font-weight: 700; font-size: 15px; color: var(--muted); }
+  .seg button[aria-pressed="true"] { background: var(--surface); color: var(--fg); box-shadow: 0 1px 3px rgba(0,0,0,.12), inset 0 0 0 1px var(--line); }
+  .seg button[data-k="splash"][aria-pressed="true"], .seg button[data-k="ending"][aria-pressed="true"] { color: var(--brass); }
+  #bBlank { min-width: 92px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); font-weight: 700; font-size: 15px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+  #bBlank svg { width: 18px; height: 18px; fill: currentColor; }
   #bBlank[aria-pressed="true"] { background: #000; color: #fff; border-color: #000; }
-  .wide { width: 100%; }
 
-  details.card { padding: 0; }
-  details summary { padding: 14px 16px; font-weight: 600; cursor: pointer; list-style: none; display: flex; justify-content: space-between; }
-  details summary::after { content: '▾'; color: var(--muted); }
-  details[open] summary::after { content: '▴'; }
-  #list { list-style: none; margin: 0; padding: 0 6px 8px; max-height: 60vh; overflow: auto; }
-  #list li { display: grid; grid-template-columns: 2.2em 1fr; gap: 6px; padding: 10px; border-radius: 10px; font: 15px/1.4 var(--text); }
-  #list li .n { color: var(--muted); font: 600 13px/1.8 var(--ui); font-variant-numeric: tabular-nums; }
-  #list li.cur { background: var(--cur); box-shadow: inset 3px 0 0 var(--brass); }
+  .list { padding: 0; overflow: hidden; gap: 0; }
+  .list-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px 8px; }
+  #bFirst { font-size: 14px; font-weight: 700; color: var(--teal-ink); padding: 6px 10px; border-radius: 8px; background: var(--sunk); border: 1px solid var(--line); }
+  #list { position: relative; list-style: none; margin: 0; padding: 0 6px 8px; max-height: 58vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  #list li { display: grid; grid-template-columns: 2.4em minmax(0, 1fr); gap: 4px; padding: 11px 10px; border-radius: 10px; font: 15px/1.42 var(--text); cursor: pointer; }
+  #list li + li { border-top: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
+  #list li:active { background: var(--sunk); }
+  #list li .n { color: var(--muted); font: 700 13px/1.75 var(--ui); font-variant-numeric: tabular-nums; }
   #list li.done { color: var(--muted); }
+  #list li.cur { background: var(--brass-soft); border-color: transparent; box-shadow: inset 3px 0 0 var(--brass); }
+  #list li.cur .n { color: var(--brass); }
+  #list li.special span:last-child { font-family: var(--ui); font-weight: 700; color: var(--brass); }
 
-  button:disabled { opacity: .4; cursor: default; }
-  .msg { text-align: center; color: var(--muted); padding: 24px 8px; }
-  .ask { position: fixed; inset: 0; background: rgba(10,20,20,.5); display: grid; place-items: center; z-index: 30; padding: 16px; }
-  .ask div { background: var(--surface); border-radius: 14px; padding: 20px; max-width: 360px; width: 100%; display: grid; gap: 16px; }
+  button:disabled { opacity: .45; cursor: default; }
+  .empty { text-align: center; color: var(--muted); padding: 22px 8px; }
+  .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(18px + env(safe-area-inset-bottom, 0px)); background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 10px; font-size: 14px; z-index: 40; max-width: calc(100% - 32px); }
+  .ask { position: fixed; inset: 0; background: rgba(8,18,18,.55); display: grid; place-items: end center; z-index: 30; padding: 16px; padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+  .ask > div { background: var(--surface); border-radius: 18px; padding: 18px; max-width: 480px; width: 100%; display: grid; gap: 14px; }
+  .ask p { margin: 0; font-size: 17px; font-weight: 600; }
   .ask .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-  .ask .btns button { min-height: 48px; border-radius: 10px; font-weight: 700; border: 1px solid var(--line); }
+  .ask .btns button { min-height: 50px; border-radius: 12px; font-weight: 800; background: var(--sunk); border: 1px solid var(--line); }
   .ask .btns .yes { background: var(--teal); color: #fff; border-color: var(--teal); }
 </style>
 </head>
 <body>
-<header>
-  <div class="t"><b>Hutbe Kumandası</b><span id="title">Bağlanıyor…</span></div>
-  <span class="pill" id="pill" data-s="off">Bağlanıyor</span>
-</header>
+<section class="top">
+  <div class="wrap">
+    <div class="hdr">
+      <div class="name"><small>Hutbe kumandası</small><b id="title">Bağlanıyor…</b></div>
+      <span class="conn" id="conn" data-s="off"><i></i><span id="connText">Bağlanıyor</span></span>
+    </div>
+    <div class="now" aria-live="polite">
+      <div class="meta"><div class="num" id="num">–</div><span class="chip" id="chip" data-k="hutbe">Hutbe</span></div>
+      <div class="prog" aria-hidden="true"><i id="prog"></i></div>
+      <div class="cur" id="curText">—</div>
+      <div class="nxt" id="nextLine"><b>Sıradaki</b><span id="nextText">—</span></div>
+    </div>
+  </div>
+</section>
 
-<main id="app">
-  <p class="msg" id="noRoom" hidden>Bu sayfa bilgisayardaki <b>Telefon kumandası</b> düğmesinin gösterdiği QR kod okutularak açılmalı.</p>
+<main class="wrap">
+  <p class="empty" id="noRoom" hidden>Bu sayfa, bilgisayardaki <b>Telefon kumandası</b> düğmesinin gösterdiği QR kod okutularak açılmalı.</p>
 
-  <section class="card now" aria-live="polite">
-    <div class="row"><span class="k">Ekrandaki cümle</span><span class="no"><b id="cur">–</b> / <span id="total">–</span></span></div>
-    <div class="scr" id="scr" hidden></div>
-    <div class="cur" id="curText">—</div>
-    <div class="nxt"><span class="k">Sıradaki</span><div id="nextText">—</div></div>
-  </section>
+  <div class="nav">
+    <button id="bPrev" aria-label="Önceki"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Geri</button>
+    <button id="bNext" aria-label="Sonraki"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>İleri</button>
+  </div>
 
-  <section class="nav">
-    <button id="bPrev" aria-label="Önceki cümle"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Geri</button>
-    <button id="bNext" aria-label="Sonraki cümle"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>İleri</button>
-  </section>
-
-  <section class="card mic">
-    <div><div class="k">Mikrofon</div><div class="st" id="micText">—</div></div>
+  <div class="panel mic" id="micBox" data-on="false">
+    <span class="dot" aria-hidden="true"></span>
+    <div class="st"><b id="micText">Mikrofon kapalı</b><span id="heard"></span></div>
     <button id="bListen" data-on="false">Dinlemeyi başlat</button>
-    <div class="heard" id="heard"></div>
-  </section>
+  </div>
 
-  <section class="screens" aria-label="Projeksiyon ekranı">
-    <button id="bSplash" aria-pressed="false">Açılış</button>
-    <button id="bEnding" aria-pressed="false">Kapanış</button>
-    <button id="bBlank" aria-pressed="false">Karart</button>
-  </section>
+  <div class="panel">
+    <div class="lbl">Projeksiyon</div>
+    <div class="screen">
+      <div class="seg" role="group" aria-label="Ekranda ne gösterilsin">
+        <button data-k="hutbe" aria-pressed="true">Hutbe</button>
+        <button data-k="splash" aria-pressed="false">Açılış</button>
+        <button data-k="ending" aria-pressed="false">Kapanış</button>
+      </div>
+      <button id="bBlank" aria-pressed="false" title="Projeksiyonu simsiyah yap"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="12" rx="2"/><rect x="9" y="18.5" width="6" height="1.5" rx=".75"/></svg>Karart</button>
+    </div>
+  </div>
 
-  <button class="wide" id="bFirst">Başa dön</button>
-
-  <details class="card" id="listBox">
-    <summary>Cümle listesi</summary>
+  <div class="panel list">
+    <div class="list-head"><span class="lbl">Cümleler · dokunarak geçin</span><button id="bFirst">Başa dön</button></div>
     <ol id="list"></ol>
-  </details>
+  </div>
 </main>
 
+<div class="toast" id="toast" role="status" hidden></div>
 <div class="ask" id="ask" hidden><div><p id="askText"></p><div class="btns"><button id="askNo">Vazgeç</button><button class="yes" id="askYes">Evet</button></div></div></div>
 
 <script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js"></script>
@@ -138,22 +171,24 @@
   const hash = new URLSearchParams(location.hash.slice(1));
   const room = hash.get('r') || '';
   const broker = BROKERS[Math.min(+hash.get('b') || 0, BROKERS.length - 1)];
-  const controls = ['#bPrev', '#bNext', '#bListen', '#bSplash', '#bEnding', '#bBlank', '#bFirst'];
+  const controls = () => document.querySelectorAll('#bPrev, #bNext, #bListen, .seg button, #bBlank, #bFirst');
 
-  let st = null;          // bilgisayardan gelen son durum
+  let st = null;          // bilgisayarın bildirdiği son durum
   let rows = [];
-  let freshAt = 0;        // son canlı (kayıtlı olmayan) durum mesajının geldiği an
   let client = null;
   let connected = false;
+  let lastMsgAt = 0;
+  let pendingUntil = 0;   // az önce basılan düğmenin sonucunu bilgisayar onaylayana kadar yerel durumu koru
 
-  function pill(text, s) { const p = $('#pill'); p.textContent = text; p.dataset.s = s; }
-  function enable(on) { controls.forEach((c) => { $(c).disabled = !on; }); }
+  function toast(m) { const t = $('#toast'); t.textContent = m; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => { t.hidden = true; }, 2600); }
+  function conn(text, s) { $('#connText').textContent = text; $('#conn').dataset.s = s; }
+  function enable(on) { controls().forEach((b) => { b.disabled = !on; }); }
 
   if (!/^[a-z0-9]{12,}$/.test(room)) {
     $('#noRoom').hidden = false;
-    pill('Kod yok', 'err');
-    enable(false);
+    conn('Kod yok', 'err');
     $('#title').textContent = 'QR kodu okutun';
+    enable(false);
     return;
   }
   const base = `hutbe-ekran/v1/${room}/`;
@@ -161,79 +196,131 @@
 
   // ---------- Bağlantı ----------
   function connect() {
-    if (!window.mqtt) { pill('İnternet yok', 'err'); $('#title').textContent = 'Kumanda yüklenemedi, internet bağlantısını kontrol edin'; return; }
-    client = window.mqtt.connect(broker, { clientId: 'hutbe-tel-' + Math.random().toString(36).slice(2, 10), clean: true, connectTimeout: 8000, reconnectPeriod: 3000, keepalive: 30 });
+    if (!window.mqtt) { conn('İnternet yok', 'err'); $('#title').textContent = 'Kumanda yüklenemedi'; return; }
+    client = window.mqtt.connect(broker, { clientId: 'hutbe-tel-' + Math.random().toString(36).slice(2, 10), clean: true, connectTimeout: 8000, reconnectPeriod: 2000, keepalive: 20 });
     client.on('connect', () => {
       connected = true;
       client.subscribe([base + 'status', base + 'rows']);
       beat();
-      send('ping');
+      send('ping', null, true);
       render();
     });
     client.on('close', () => { connected = false; render(); });
-    client.on('message', (topic, payload, packet) => {
+    client.on('offline', () => { connected = false; render(); });
+    client.on('message', (topic, payload) => {
       let d;
       try { d = JSON.parse(String(payload)); } catch (e) { return; }
+      lastMsgAt = Date.now();
       if (topic.endsWith('/rows') && Array.isArray(d)) { rows = d.map((x) => String(x)); renderList(); render(); return; }
       if (topic.endsWith('/status') && d && typeof d === 'object') {
+        // Basılan düğmenin onayı gelene kadar (en çok 1,5 sn) telefonun kendi tahmini ekranda kalsın, geri sıçramasın
+        if (Date.now() < pendingUntil && st && d.cur !== st.cur && d.rev === st.prevRev) return;
         st = d;
-        if (!packet.retain) freshAt = Date.now();
+        pendingUntil = 0;
         render();
       }
     });
   }
   function beat() { if (client && connected) client.publish(base + 'phone', JSON.stringify({ t: Date.now() })); }
   setInterval(beat, 8000);
-  setInterval(render, 2000);
+  setInterval(render, 3000);
 
-  function send(cmd, extra) {
-    if (!client || !connected) return;
+  function send(cmd, extra, quiet) {
+    if (!client || !connected) { if (!quiet) toast('Bağlantı yok, yeniden bağlanıyor…'); return false; }
     const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
     client.publish(base + 'cmd', JSON.stringify(Object.assign({ cmd, id }, extra || {})));
-    if (navigator.vibrate) navigator.vibrate(15);
+    if (!quiet && navigator.vibrate) navigator.vibrate(12);
+    return true;
+  }
+
+  // Düğmeye basınca bilgisayarın cevabını beklemeden ekranı hemen güncelle (cevap gelince düzeltilir)
+  function predict(fn) {
+    if (!st) return;
+    const prevRev = st.rev;
+    st = Object.assign({}, st);
+    fn(st);
+    st.prevRev = prevRev;
+    pendingUntil = Date.now() + 1500;
+    render();
+  }
+  const last = () => Math.max(0, (st && st.total | 0) - 1);
+  function doNext() {
+    if (!send('next')) return;
+    predict((s) => { if (s.blank) return; if (s.splash) s.splash = false; else if (s.cur >= last()) s.ending = true; else s.cur++; });
+  }
+  function doPrev() {
+    if (!send('prev')) return;
+    predict((s) => { if (s.blank) return; if (s.ending) s.ending = false; else if (s.splash) return; else if (s.cur <= 0) s.splash = true; else s.cur--; });
+  }
+  function doGo(i) {
+    if (!send('go', { i })) return;
+    predict((s) => { s.cur = i; s.splash = false; s.ending = false; });
   }
 
   // ---------- Ekran ----------
-  function pcLive() { return st && st.online && Date.now() - freshAt < 25000; }
+  function stale() { return Date.now() - lastMsgAt > 45000; }
   function render() {
-    if (!connected) { pill('Bağlanıyor', 'off'); enable(false); return; }
-    if (!st) { pill('Bilgisayar bekleniyor', 'off'); $('#title').textContent = 'Bilgisayarda programın açık olduğundan emin olun'; enable(false); return; }
-    if (st.online === false) { pill('Bilgisayar kapalı', 'err'); $('#title').textContent = 'Bilgisayarda Hutbe Ekranı kapalı'; enable(false); return; }
-    if (!pcLive()) { pill('Bilgisayar yanıt vermiyor', 'err'); enable(false); }
-    else { pill('Bağlı', 'on'); enable(true); }
+    if (!connected) { conn('Bağlanıyor', 'warn'); enable(false); return; }
+    if (!st) { conn('Bilgisayar bekleniyor', 'warn'); $('#title').textContent = 'Bilgisayarda Hutbe Ekranı açık mı?'; enable(false); return; }
+    if (st.online === false) { conn('Bilgisayar kapalı', 'err'); $('#title').textContent = 'Bilgisayarda Hutbe Ekranı kapalı'; enable(false); return; }
+    enable(true);
+    conn(stale() ? 'Bağlantı yavaş' : 'Bağlı', stale() ? 'warn' : 'on');
     $('#title').textContent = st.title || 'Hutbe';
     const total = st.total | 0;
-    $('#cur').textContent = total ? (st.cur | 0) + 1 : '–';
-    $('#total').textContent = total || '–';
-    $('#curText').textContent = rows[st.cur] || '—';
-    $('#nextText').textContent = rows[(st.cur | 0) + 1] || (total ? 'Son cümle. İleri basınca kapanış ekranı açılır.' : '—');
-    const scr = st.blank ? 'Projeksiyon karartıldı' : st.splash ? 'Projeksiyonda açılış ekranı var' : st.ending ? 'Projeksiyonda kapanış ekranı var' : '';
-    $('#scr').textContent = scr; $('#scr').hidden = !scr;
+    const cur = Math.min(st.cur | 0, Math.max(0, total - 1));
+    const mode = st.blank ? 'blank' : st.splash ? 'splash' : st.ending ? 'ending' : 'hutbe';
+    $('#num').innerHTML = total ? (st.splash ? 'Açılış' : st.ending ? 'Kapanış' : `${cur + 1}<span> / ${total}</span>`) : '–';
+    const chip = $('#chip');
+    chip.dataset.k = mode;
+    chip.textContent = { blank: 'Ekran karartıldı', splash: 'Açılış ekranı', ending: 'Kapanış ekranı', hutbe: 'Hutbe' }[mode];
+    $('#prog').style.width = total ? (st.ending ? 100 : st.splash ? 0 : ((cur + 1) / total) * 100) + '%' : '0';
+    if (st.splash) {
+      $('#curText').textContent = 'Projeksiyonda açılış ekranı var. İleri’ye basınca hutbe başlar.';
+      $('#nextText').textContent = rows[0] || '—';
+    } else if (st.ending) {
+      $('#curText').textContent = 'Projeksiyonda kapanış ekranı var: son ayet ve Hayırlı Cumalar.';
+      $('#nextText').textContent = 'Geri’ye basınca son cümleye dönülür.';
+    } else {
+      $('#curText').textContent = rows[cur] || '—';
+      $('#nextText').textContent = rows[cur + 1] || (total ? 'Son cümle. İleri’ye basınca kapanış ekranı açılır.' : '—');
+    }
+    const err = /hata|yok|kullanılamıyor|bulunamadı/i.test(st.mic || '');
+    $('#micBox').dataset.on = String(!!st.listening);
+    $('#micBox').dataset.err = String(err);
     $('#micText').textContent = st.mic || (st.listening ? 'Dinleniyor' : 'Mikrofon kapalı');
-    $('#heard').textContent = st.listening && st.heard && st.heard !== '—' ? '“' + st.heard + '”' : '';
+    $('#heard').textContent = st.listening && st.heard && st.heard !== '—' ? '“' + st.heard + '”' : (st.listening ? 'İmam konuşunca duyulan söz burada görünür' : '');
     const L = $('#bListen');
     L.dataset.on = String(!!st.listening);
-    L.textContent = st.listening ? 'Dinlemeyi durdur' : 'Dinlemeyi başlat';
-    $('#bSplash').setAttribute('aria-pressed', String(!!st.splash));
-    $('#bEnding').setAttribute('aria-pressed', String(!!st.ending));
+    L.textContent = st.listening ? 'Durdur' : 'Dinlemeyi başlat';
+    document.querySelectorAll('.seg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.k === (st.splash ? 'splash' : st.ending ? 'ending' : 'hutbe'))));
     $('#bBlank').setAttribute('aria-pressed', String(!!st.blank));
     markList();
   }
+
   function renderList() {
-    $('#list').innerHTML = rows.map((t, i) => `<li data-i="${i}"><span class="n">${i + 1}</span><span>${esc(t)}</span></li>`).join('');
+    const items = [`<li data-i="-1" class="special"><span class="n">·</span><span>Açılış ekranı</span></li>`]
+      .concat(rows.map((t, i) => `<li data-i="${i}" role="button" tabindex="0"><span class="n">${i + 1}</span><span>${esc(t)}</span></li>`))
+      .concat(rows.length ? [`<li data-i="end" class="special"><span class="n">·</span><span>Kapanış ekranı</span></li>`] : []);
+    $('#list').innerHTML = rows.length ? items.join('') : '<li class="empty">Bilgisayarda hutbe yüklenince cümleler burada görünür.</li>';
+    lastMarked = null;
     markList();
   }
-  let lastMarked = -1;
+  let lastMarked = null;
   function markList() {
     if (!st) return;
     const cur = st.cur | 0;
-    document.querySelectorAll('#list li').forEach((li) => {
-      const i = +li.dataset.i;
-      li.classList.toggle('cur', i === cur);
-      li.classList.toggle('done', i < cur);
+    const key = st.splash ? '-1' : st.ending ? 'end' : String(cur);
+    document.querySelectorAll('#list li[data-i]').forEach((li) => {
+      const i = li.dataset.i;
+      li.classList.toggle('cur', i === key);
+      li.classList.toggle('done', !st.splash && i !== '-1' && i !== 'end' && +i < cur);
     });
-    if (cur !== lastMarked && $('#listBox').open) document.querySelector('#list li.cur')?.scrollIntoView({ block: 'center' });
-    lastMarked = cur;
+    if (key !== lastMarked) {
+      const el = document.querySelector('#list li.cur');
+      const box = $('#list');
+      if (el) box.scrollTop = el.offsetTop - box.clientHeight / 2 + el.clientHeight / 2; // listeyi kaydır, sayfayı değil
+      lastMarked = key;
+    }
   }
 
   function ask(text, yes) {
@@ -245,27 +332,38 @@
   }
 
   // ---------- Düğmeler ----------
-  $('#bPrev').onclick = () => send('prev');
-  $('#bNext').onclick = () => send('next');
-  $('#bListen').onclick = async () => {
+  $('#bPrev').addEventListener('click', doPrev);
+  $('#bNext').addEventListener('click', doNext);
+  $('#bListen').addEventListener('click', async () => {
     const on = !(st && st.listening);
     if (!on && !(await ask('Dinleme durdurulsun mu? Ekran artık kendiliğinden ilerlemez.', 'Durdur'))) return;
-    send('listen', { on });
-  };
-  $('#bSplash').onclick = () => send('splash', { on: !(st && st.splash) });
-  $('#bEnding').onclick = () => send('ending', { on: !(st && st.ending) });
-  $('#bBlank').onclick = () => send('blank', { on: !(st && st.blank) });
-  $('#bFirst').onclick = async () => { if (await ask('Hutbe başa alınsın mı?', 'Başa dön')) send('first'); };
-  $('#list').addEventListener('click', (e) => {
-    const li = e.target.closest('li[data-i]');
-    if (li && pcLive()) send('go', { i: +li.dataset.i });
+    if (send('listen', { on })) predict((s) => { s.listening = on; s.mic = on ? 'Başlatılıyor…' : 'Mikrofon kapalı'; });
   });
-  $('#listBox').addEventListener('toggle', () => { lastMarked = -1; markList(); });
+  document.querySelector('.seg').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-k]');
+    if (!b || !st) return;
+    const k = b.dataset.k;
+    if (k === 'hutbe') { if (st.splash) send('splash', { on: false }); if (st.ending) send('ending', { on: false }); predict((s) => { s.splash = false; s.ending = false; }); }
+    if (k === 'splash' && send('splash', { on: true })) predict((s) => { s.splash = true; s.ending = false; });
+    if (k === 'ending' && send('ending', { on: true })) predict((s) => { s.ending = true; s.splash = false; });
+  });
+  $('#bBlank').addEventListener('click', () => { const on = !(st && st.blank); if (send('blank', { on })) predict((s) => { s.blank = on; }); });
+  $('#bFirst').addEventListener('click', async () => { if (await ask('Hutbe başa alınsın mı?', 'Başa dön') && send('first')) predict((s) => { s.cur = 0; s.splash = false; s.ending = false; }); });
+  // Cümleye dokun: oraya geç
+  function pick(li) {
+    if (!li || !st) return;
+    const i = li.dataset.i;
+    if (i === '-1') { if (send('splash', { on: true })) predict((s) => { s.splash = true; s.ending = false; }); }
+    else if (i === 'end') { if (send('ending', { on: true })) predict((s) => { s.ending = true; s.splash = false; }); }
+    else if (/^\d+$/.test(i)) doGo(+i);
+  }
+  $('#list').addEventListener('click', (e) => pick(e.target.closest('li[data-i]')));
+  $('#list').addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(e.target.closest('li[data-i]')); } });
 
-  // Telefon ekranı kumanda açıkken kararmasın
+  // Telefon ekranı kumanda açıkken kararmasın; uygulamaya geri dönünce hemen güncel durumu iste
   let lock = null;
   async function awake() { try { if (!lock && navigator.wakeLock && document.visibilityState === 'visible') { lock = await navigator.wakeLock.request('screen'); lock.addEventListener('release', () => { lock = null; }); } } catch (e) { /* desteklenmiyor */ } }
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { awake(); beat(); send('ping'); } });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { awake(); if (client && !connected) client.reconnect(); beat(); send('ping', null, true); } });
   awake();
 
   connect();
