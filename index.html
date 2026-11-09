@@ -1362,12 +1362,20 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
     if (h.title) state.title = h.title;
     state.current = 0;
     state.readyFile = READY[idx].file;
+    state.readySig = sig(READY[idx]);
     commit();
     return h;
   }
 
   // Siteye bu haftanın hutbesi eklendiyse, tarayıcıda kayıtlı eski hutbede kalınmasın
   // En yeni hazır hutbe kendiliğinden yüklenir (sorulmaz). Hutbe okunurken (dinleme açıkken) dokunulmaz.
+  // Hazır hutbenin içerik imzası: Diyanet metni düzeltirse dosya adı aynı kalır, imza değişir
+  function sig(h) {
+    const t = JSON.stringify(h && h.data ? h.data.rows : []);
+    let x = 0;
+    for (let i = 0; i < t.length; i++) x = (x * 31 + t.charCodeAt(i)) | 0;
+    return t.length + ':' + x;
+  }
   function offerNewest() {
     if (!READY.length || !state.rows.length) return;
     if (!state.readyFile) { // eski sürümden kalan kayıt: hangi hazır hutbe olduğunu metinden bul
@@ -1375,7 +1383,18 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
       const hit = READY.find((h) => h.data.rows[0] && h.data.rows[0][state.trackLang] === first);
       if (hit) { state.readyFile = hit.file; persist(); }
     }
-    if (state.readyFile === READY[0].file || listening) return;
+    if (listening) return;
+    if (state.readyFile === READY[0].file) {
+      // Aynı hutbenin düzeltilmiş hali: hutbe henüz başlamadıysa (ilk cümle/açılış) güncel metni yükle
+      if (!state.readySig) { state.readySig = sig(READY[0]); persist(); return; }
+      if (state.readySig === sig(READY[0]) || state.current > 0) return;
+      loadReady(0);
+      setSplash(true);
+      renderLive();
+      if (!$('#tab-texts').hidden) { renderSources(); renderRows(); }
+      toast(`Hutbe metni güncellendi: ${READY[0].date} · ${READY[0].title}`);
+      return;
+    }
     loadReady(0);
     setSplash(true);
     renderLive();
@@ -1397,7 +1416,7 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
       const m = html.match(/window\.HAZIR_HUTBELER = (\[[\s\S]*?\]);\s*(?:<\/script>|\n)/);
       if (!m) return;
       const list = JSON.parse(m[1]);
-      if (!Array.isArray(list) || !list.length || !list[0].data || (READY[0] && list[0].file === READY[0].file)) return;
+      if (!Array.isArray(list) || !list.length || !list[0].data || (READY[0] && list[0].file === READY[0].file && sig(list[0]) === sig(READY[0]))) return;
       READY.splice(0, READY.length, ...list);
       renderReadyList();
       offerNewest();
