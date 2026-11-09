@@ -1636,7 +1636,7 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
   $('#rowsTable').addEventListener('input', (e) => {
     const t = e.target.closest('textarea[data-code]');
     if (!t || locked(t.dataset.code)) return;
-    if (editBase === null) editBase = JSON.stringify(state.rows);
+    if (editBase === null) { editBase = JSON.stringify(state.rows); editLen = String(state.rows[+t.dataset.i][t.dataset.code] || '').length; }
     state.rows[+t.dataset.i][t.dataset.code] = t.value;
     t.classList.toggle('empty', !t.value);
     rowsEdited = true;
@@ -1649,12 +1649,14 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-06-ibadet.json","date":"06.11.2026","t
     // bunu boş gönderebilir): imlecin hemen solundaki karaktere bak
     clearTimeout(idleTimer);
     const before = t.value.charAt((t.selectionStart || 0) - 1);
-    if (!e.isComposing && /[\s.,!?;:]/.test(before)) closeEdit();
-    else idleTimer = setTimeout(closeEdit, 900);
+    // Adım kapanır: boşluk/noktalama yazılınca, boşluksuz da olsa her 8 karakterde ya da kısa bir aradan sonra
+    if (!e.isComposing && (/[\s.,!?;:]/.test(before) || Math.abs(t.value.length - editLen) >= 8)) closeEdit();
+    else idleTimer = setTimeout(closeEdit, 700);
   });
   // Harf birleştirme (ör. telefon klavyesi) bitince de adımı kapatmaya hazırla
   $('#rowsTable').addEventListener('compositionend', () => { clearTimeout(idleTimer); idleTimer = setTimeout(closeEdit, 600); });
   let idleTimer = null;
+  let editLen = 0; // adım başladığında hücredeki karakter sayısı
   $('#rowsTable').addEventListener('focusout', (e) => { if (e.target.matches('textarea[data-code]')) closeEdit(); });
   $('#btnUndo').onclick = () => {
     closeEdit();
