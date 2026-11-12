@@ -78,7 +78,7 @@
   #bListen[data-on="true"] { background: color-mix(in srgb, var(--danger) 12%, var(--surface)); color: var(--danger); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 40%, transparent); }
 
   .screen { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
-  .seg { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--sunk); border: 1px solid var(--line); border-radius: 12px; padding: 3px; gap: 3px; }
+  .seg { display: grid; grid-template-columns: repeat(2, 1fr); background: var(--sunk); border: 1px solid var(--line); border-radius: 12px; padding: 3px; gap: 3px; }
   .seg button { min-height: 44px; border-radius: 9px; font-weight: 700; font-size: 15px; color: var(--muted); }
   .seg button[aria-pressed="true"] { background: var(--surface); color: var(--fg); box-shadow: 0 1px 3px rgba(0,0,0,.12), inset 0 0 0 1px var(--line); }
   .seg button[data-k="splash"][aria-pressed="true"] { color: var(--brass); }
@@ -98,6 +98,21 @@
   #list li.cur { background: var(--brass-soft); border-color: transparent; box-shadow: inset 3px 0 0 var(--brass); }
   #list li.cur .n { color: var(--brass); }
   #list li.special span:last-child { font-family: var(--ui); font-weight: 700; color: var(--brass); }
+
+  /* Bu telefon mikrofon: imamı dinler, duyduğunu bilgisayara gönderir. Bu kipte yalnızca dinleme paneli görünür. */
+  .pm-entry { display: grid; gap: 4px; text-align: left; }
+  .pm-entry button { min-height: 50px; border-radius: 12px; font-weight: 800; font-size: 16px; background: var(--sunk); border: 1px solid var(--line); color: var(--teal-ink); }
+  .pm-entry p { margin: 0; font-size: 13px; color: var(--muted); }
+  body.micmode .nav, body.micmode .wrap > .panel:not(#pmBox), body.micmode .pm-entry { display: none; }
+  #pmBox { gap: 14px; }
+  .pm-head { display: flex; align-items: center; gap: 12px; }
+  .pm-head .dot { width: 16px; height: 16px; border-radius: 50%; background: var(--live); box-shadow: 0 0 0 5px color-mix(in srgb, var(--live) 22%, transparent); animation: pulse 1.6s infinite; flex: none; }
+  #pmBox[data-err="true"] .pm-head .dot { background: var(--danger); animation: none; box-shadow: none; }
+  .pm-head b { font-size: 22px; }
+  .pm-heard { margin: 0; min-height: 3em; font: italic 17px/1.45 var(--text); color: var(--muted); }
+  .pm-note { margin: 0; font-size: 14px; color: var(--muted); }
+  #pmStop { min-height: 54px; border-radius: 12px; font-weight: 800; font-size: 16px; background: color-mix(in srgb, var(--danger) 12%, var(--surface)); color: var(--danger); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 40%, transparent); }
+  @media (prefers-reduced-motion: reduce) { .pm-head .dot { animation: none; } }
 
   button:disabled { opacity: .45; cursor: default; }
   .empty { text-align: center; color: var(--muted); padding: 22px 8px; }
@@ -151,9 +166,22 @@
     </div>
   </div>
 
+  <div class="panel" id="pmBox" data-err="false" hidden>
+    <div class="lbl">Bu telefon mikrofon</div>
+    <div class="pm-head"><span class="dot" aria-hidden="true"></span><b id="pmText">Başlatılıyor…</b></div>
+    <p class="pm-heard" id="pmHeard" aria-live="polite"></p>
+    <p class="pm-note">Telefonu imama ya da hoparlöre yakın koyun. Bu sayfa açık ve ekran önde kalmalı; telefonu kilitlemeyin.</p>
+    <button id="pmStop">Mikrofonu kapat</button>
+  </div>
+
   <div class="panel list">
     <div class="list-head"><span class="lbl">Cümleler · dokunarak geçin</span><button id="bFirst">Başa dön</button></div>
     <ol id="list"></ol>
+  </div>
+
+  <div class="pm-entry">
+    <button id="bPhoneMic">Bu telefonu mikrofon yap</button>
+    <p>İmamın sesini bilgisayar yerine bu telefon dinler; ekran telefonun duyduğuna göre ilerler. İkinci bir telefonda açıp kumandayı diğer telefondan kullanabilirsiniz.</p>
   </div>
 </main>
 
@@ -171,7 +199,7 @@
   const room = hash.get('r') || '';
   const secret = hash.get('k') || '';
   const broker = BROKERS[Math.min(+hash.get('b') || 0, BROKERS.length - 1)];
-  const controls = () => document.querySelectorAll('#bPrev, #bNext, #bListen, .seg button, #bBlank, #bFirst');
+  const controls = () => document.querySelectorAll('#bPrev, #bNext, #bListen, .seg button, #bBlank, #bFirst, #bPhoneMic');
 
   let st = null;          // bilgisayarın bildirdiği son durum
   let rows = [];
@@ -217,6 +245,7 @@
         if (Date.now() < pendingUntil && st && d.cur !== st.cur && d.rev === st.prevRev) return;
         st = d;
         pendingUntil = 0;
+        pmCheck();
         render();
       }
     });
@@ -237,7 +266,7 @@
     if (!client || !connected) { if (!quiet) toast('Bağlantı yok, yeniden bağlanıyor…'); return false; }
     if (!window.crypto || !crypto.subtle) { if (!quiet) toast('Bu tarayıcı güvenli bağlantıyı desteklemiyor.'); return false; }
     const d = Object.assign({ cmd, id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7), t: Date.now() }, extra || {});
-    const text = [d.cmd, d.id, d.t, d.i === undefined ? '' : d.i, d.on === undefined ? '' : d.on].join('|');
+    const text = [d.cmd, d.id, d.t, d.i === undefined ? '' : d.i, d.on === undefined ? '' : d.on].join('|') + (d.x === undefined ? '' : '|' + d.x);
     // sırayla gönder: art arda basılan İleri'ler karışmasın
     outQ = outQ.then(() => signKey()).then((k) => crypto.subtle.sign('HMAC', k, new TextEncoder().encode(text)))
       .then((sig) => { d.sig = hex(sig); if (client && connected) client.publish(base + 'cmd', JSON.stringify(d)); })
@@ -342,6 +371,100 @@
       $('#askYes').onclick = () => done(true); $('#askNo').onclick = () => done(false);
     });
   }
+
+  // ---------- Bu telefon mikrofon ----------
+  // Telefon imamı dinler; duyduğu sözleri (imzalı) bilgisayara gönderir, bilgisayar kendi mikrofonunu kapatır.
+  // En son başlatan kazanır: bilgisayarda dinleme açılırsa ya da başka telefon mikrofon olursa bu telefon bırakır.
+  const PSR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const ANDROID = /Android/i.test(navigator.userAgent);
+  let pm = null, pmOn = false, pmSess = 0, pmStarted = 0, pmAcked = false, pmFails = 0, pmLast = 0, pmTimer = null, pmInterim = '', pmFinals = [];
+  function pmStatus(text, err) { $('#pmText').textContent = text; $('#pmBox').dataset.err = String(!!err); }
+  function pmSend() {
+    if (!pmOn) return;
+    const d = { f: pmFinals.splice(0), n: pmInterim.slice(-600) };
+    if (!pmAcked) d.s = 1; // bilgisayar bu oturumu kabul edene kadar "yeni başladı" bilgisi gider
+    pmLast = Date.now();
+    send('speech', { i: pmSess, on: true, x: JSON.stringify(d) }, true);
+  }
+  // Kesinleşen sözler hemen, ara sonuçlar en çok saniyede 4 kez gider
+  function pmFlush(now) {
+    clearTimeout(pmTimer);
+    pmTimer = setTimeout(pmSend, now ? 0 : Math.max(0, 250 - (Date.now() - pmLast)));
+  }
+  function pmRun() {
+    pm = new PSR();
+    pm.lang = (st && st.speech) || 'tr-TR';
+    pm.continuous = !ANDROID; // Android'de sürekli kip sözleri tekrarlıyor; orada her cümleden sonra yeniden başlatılır
+    pm.interimResults = true;
+    pm.maxAlternatives = 1;
+    pm.onstart = () => { if (pmOn && pmFails === 0) pmStatus('Dinliyor'); };
+    pm.onresult = (e) => {
+      pmFails = 0;
+      let interim = '';
+      for (let k = e.resultIndex; k < e.results.length; k++) {
+        const r = e.results[k];
+        if (r.isFinal) pmFinals.push(r[0].transcript); else interim += r[0].transcript + ' ';
+      }
+      pmInterim = interim;
+      $('#pmHeard').textContent = '“' + (interim || e.results[e.results.length - 1][0].transcript).trim().slice(-140) + '”';
+      pmStatus('Dinliyor');
+      pmFlush(pmFinals.length > 0);
+    };
+    pm.onerror = (e) => {
+      if (e.error === 'no-speech' || e.error === 'aborted') return;
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { pmStop('Mikrofon izni verilmedi. Tarayıcının site ayarlarından bu sayfaya mikrofon izni verin.'); return; }
+      pmFails++;
+      pmStatus(e.error === 'network' ? 'İnternet yok, yeniden deneniyor' : e.error === 'audio-capture' ? 'Mikrofon bulunamadı' : 'Ses tanıma hatası, yeniden deneniyor', true);
+    };
+    pm.onend = () => {
+      if (!pmOn) return;
+      pmInterim = '';
+      if (pmFails === 0) { try { pm.start(); return; } catch (err) { /* aşağıda kısa bekleyip dene */ } }
+      setTimeout(() => { try { if (pmOn) pm.start(); } catch (err) { /* zaten çalışıyor */ } }, Math.min(5000, 200 + pmFails * 700));
+    };
+    try { pm.start(); } catch (e) { /* yok say */ }
+  }
+  function pmStart() {
+    if (!PSR) { toast('Bu tarayıcı ses tanımayı desteklemiyor. Android telefonda Google Chrome ile açın.'); return; }
+    if (!st || st.online === false) { toast('Önce bilgisayarda Hutbe Ekranı açık olmalı.'); return; }
+    pmOn = true; pmAcked = false; pmFails = 0; pmFinals = []; pmInterim = '';
+    pmSess = 1 + Math.floor(Math.random() * 2e9);
+    pmStarted = Date.now();
+    document.body.classList.add('micmode');
+    $('#pmBox').hidden = false;
+    $('#pmHeard').textContent = 'İmam konuşunca duyulan söz burada görünür';
+    pmStatus('Başlatılıyor…');
+    pmRun();
+    pmSend();
+    awake();
+    window.scrollTo(0, 0);
+  }
+  function pmStop(why) {
+    if (!pmOn) return;
+    pmOn = false;
+    clearTimeout(pmTimer);
+    try { pm && pm.stop(); } catch (e) { /* yok say */ }
+    pm = null;
+    send('speech', { i: pmSess, on: false }, true);
+    document.body.classList.remove('micmode');
+    $('#pmBox').hidden = true;
+    if (why) toast(why);
+  }
+  // Bilgisayar bu telefonu dinleyici olarak kabul etti mi, yoksa başkası mı devraldı?
+  function pmCheck() {
+    if (!pmOn || !st) return;
+    const mine = st.src === 'phone' && st.sess === pmSess;
+    if (mine) { if (!pmAcked) { pmAcked = true; if (navigator.vibrate) navigator.vibrate(30); } return; }
+    if (st.online === false) return pmStop('Bilgisayarda program kapandı; telefon mikrofonu durdu.');
+    if (!pmAcked && Date.now() - pmStarted < 8000) return; // bilgisayarın cevabı bekleniyor
+    if (!pmAcked) return pmStop('Bilgisayara ulaşılamadı. Bilgisayarda programın açık olduğunu kontrol edip yeniden deneyin.');
+    pmStop(st.src === 'pc' ? 'Bilgisayarın kendi mikrofonu açıldı; bu telefon dinlemeyi bıraktı.' : st.src === 'phone' ? 'Başka bir telefon mikrofon oldu; bu telefon dinlemeyi bıraktı.' : 'Dinleme durduruldu.');
+  }
+  setInterval(() => { pmCheck(); if (pmOn && Date.now() - pmLast > 4000) pmSend(); }, 2000); // sessizken de "buradayım" der
+  $('#bPhoneMic').addEventListener('click', async () => {
+    if (await ask('Bu telefon imamın sesini dinlesin mi? Bilgisayarın mikrofonu kapanır, ekran bu telefonun duyduğuna göre ilerler.', 'Mikrofon yap')) pmStart();
+  });
+  $('#pmStop').addEventListener('click', async () => { if (await ask('Telefon mikrofonu kapatılsın mı? Ekran artık kendiliğinden ilerlemez.', 'Kapat')) pmStop(); });
 
   // ---------- Düğmeler ----------
   $('#bPrev').addEventListener('click', doPrev);
