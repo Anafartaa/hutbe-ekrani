@@ -1433,6 +1433,7 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-13-dijital-mecrada-ahlak.json","date":
     }
     phoneMicAt = Date.now();
     if (d.w) { setMic('Telefonda "Dinlemeyi başlatmak için dokunun" düğmesine basın', 'err'); notify(); return; }
+    if (d.h) { setMic('Mikrofon telefonunun ekranı kapandı; telefonu açın', 'err'); notify(); return; }
     setMic('Telefon dinliyor: ' + micName, 'on');
     checkEnd();
     const fin = Array.isArray(d.f) ? d.f.filter((t) => typeof t === 'string').slice(0, 30).map((t) => t.slice(0, 1000)) : [];
@@ -1475,7 +1476,14 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-13-dijital-mecrada-ahlak.json","date":
     };
     if (window.top === window) channel.postMessage({ type: 'hello', from: TAB_ID });
   }
+  // Sayfa hutbe sırasında yanlışlıkla yenilenir ya da Chrome yeniden açılırsa dinleme kaldığı yerden sürsün
+  const LISTEN_KEY = 'hutbe-ekran.dinleme';
+  function saveListen() {
+    try { localStorage.setItem(LISTEN_KEY, JSON.stringify(listening ? { src: phoneMic ? 'phone' : 'pc', dev: micDev, name: micName, t: Date.now() } : null)); } catch (e) { /* kayıt yok */ }
+  }
+  setInterval(saveListen, 5000);
   function updateListenBtn() {
+    saveListen();
     notify();
     const b = $('#btnListen');
     b.dataset.on = String(listening);
@@ -2140,6 +2148,8 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-13-dijital-mecrada-ahlak.json","date":
   if (cami) cloudPull();
 
   // ---------- Başlangıç ----------
+  let resumeListen = null;
+  try { resumeListen = JSON.parse(localStorage.getItem(LISTEN_KEY) || 'null'); } catch (e) { resumeListen = null; }
   if (!state.rows.length && READY.length) loadReady(0); // ilk açılışta en yeni hazır hutbe gelir
   // Hutbe başındaysa projeksiyon açılış görseliyle başlasın (hutbe ortasında sayfa yenilenirse gösterme)
   state.splash = state.current === 0 && state.rows.length > 0;
@@ -2151,6 +2161,15 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-13-dijital-mecrada-ahlak.json","date":
   syncTracker();
   renderLive();
   scalePreview();
+  // En çok 3 dakika önce dinleniyorduysa (sayfa yenilendi, Chrome kapandı/açıldı) dinlemeyi kendiliğinden sürdür
+  if (resumeListen && Date.now() - resumeListen.t < 180000 && window.top === window && state.rows.length) {
+    setTimeout(() => {
+      if (listening) return;
+      if (resumeListen.src === 'phone' && resumeListen.dev) selectMic(resumeListen.dev, resumeListen.name);
+      else startListening();
+      toast('Program yeniden açıldı; dinleme kaldığı yerden sürüyor.');
+    }, 1500);
+  }
   renderReadyList();
   markReadyList();
   offerNewest();
@@ -2222,7 +2241,9 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-13-dijital-mecrada-ahlak.json","date":
   }
 
   // ---------- Bağlantı ----------
-  let client = null;
+  // Bilgisayar iki sunucuya birden bağlanır ve her mesajı ikisine de yazar: hutbe sırasında biri çökerse telefon
+  // kendiliğinden diğerine geçer, kumanda kesilmez. Aynı komut iki kez gelirse (kimliğinden) bir kez uygulanır.
+  let clients = [];
   let connected = false;
   let phoneSeen = 0;
   let lastStatus = '';
@@ -2230,16 +2251,14 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-13-dijital-mecrada-ahlak.json","date":
   const seenIds = new Set();
 
   async function connect() {
-    if (client) return;
+    if (clients.length) return;
     try { await loadScript(CFG.mqtt); } catch (e) { setState('Kumanda için internet gerekiyor', 'err'); return; }
-    const idx = Math.min(saved.broker || 0, CFG.brokers.length - 1);
-    tryBroker(idx, saved.broker == null);
-  }
-
-  // İlk kurulumda sunuculardan hangisi çalışıyorsa onu seçer ve kaydeder (telefon da aynısını kullanır)
-  function tryBroker(idx, canFallback) {
+    if (clients.length) return;
     setState('Bağlanıyor…', 'off');
-    const c = window.mqtt.connect(CFG.brokers[idx], {
+    clients = CFG.brokers.map((url, idx) => openBroker(url, idx));
+  }
+  function openBroker(url, idx) {
+    const c = window.mqtt.connect(url, {
       clientId: 'hutbe-pc-' + Math.random().toString(36).slice(2, 10),
       clean: true,
       connectTimeout: 8000,
@@ -2247,31 +2266,35 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-13-dijital-mecrada-ahlak.json","date":
       keepalive: 30,
       will: { topic: base() + 'status', payload: JSON.stringify({ online: false }), retain: true, qos: 0 },
     });
-    client = c;
-    let everConnected = false;
-    const giveUp = canFallback && idx + 1 < CFG.brokers.length
-      ? setTimeout(() => { if (!everConnected) { c.end(true); client = null; tryBroker(idx + 1, true); } }, 9000)
-      : null;
     c.on('connect', () => {
-      everConnected = true;
-      clearTimeout(giveUp);
-      if (saved.broker !== idx) { saved.broker = idx; save(); renderPanel(); }
-      connected = true;
+      // Telefonun ilk deneyeceği sunucu: ilk kurulumda hangisi önce bağlandıysa (QR koddaki b=)
+      if (saved.broker == null) { saved.broker = idx; save(); renderPanel(); }
       c.subscribe([base() + 'cmd', base() + 'phone'], { qos: 0 });
       lastStatus = ''; lastRows = '';
+      refreshConn();
       publish(true);
-      setState(phoneLive() ? 'Telefon bağlı' : 'Hazır, telefon bekleniyor', 'on');
     });
-    c.on('close', () => { if (connected) { connected = false; setState('Bağlantı koptu, yeniden deneniyor', 'err'); } });
+    c.on('close', refreshConn);
+    c.on('offline', refreshConn);
     c.on('error', () => { /* yeniden bağlanmayı mqtt kendisi dener */ });
     c.on('message', onMessage);
+    return c;
+  }
+  function refreshConn() {
+    const was = connected;
+    connected = clients.some((c) => c && c.connected);
+    if (connected) setState(phoneLive() ? 'Telefon bağlı' : 'Hazır, telefon bekleniyor', 'on');
+    else if (was) setState('Bağlantı koptu, yeniden deneniyor', 'err');
+  }
+  function pub(topic, payload, opts) {
+    clients.forEach((c) => { if (c && c.connected) { try { c.publish(topic, payload, opts); } catch (e) { /* yok say */ } } });
   }
 
   function disconnect() {
-    if (!client) return;
-    try { client.publish(base() + 'status', JSON.stringify({ online: false }), { retain: true }); } catch (e) { /* yok say */ }
-    client.end(true);
-    client = null;
+    if (!clients.length) return;
+    pub(base() + 'status', JSON.stringify({ online: false }), { retain: true });
+    clients.forEach((c) => { try { c.end(true); } catch (e) { /* yok say */ } });
+    clients = [];
     connected = false;
   }
 
@@ -2359,9 +2382,9 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-13-dijital-mecrada-ahlak.json","date":
   let lastBeat = 0;
   let lastKey = '';
   function publish(force) {
-    if (!client || !connected) return;
+    if (!connected) return;
     const rows = rowsPayload();
-    if (rows !== lastRows) { lastRows = rows; client.publish(base() + 'rows', rows, { retain: true }); }
+    if (rows !== lastRows) { lastRows = rows; pub(base() + 'rows', rows, { retain: true }); }
     const snap = snapshot();
     const s = JSON.stringify(snap);
     const now = Date.now();
@@ -2373,7 +2396,7 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-13-dijital-mecrada-ahlak.json","date":
       lastStatus = s;
       lastKey = key;
       lastBeat = now;
-      client.publish(base() + 'status', JSON.stringify(Object.assign(snap, { beat: now })), { retain: true });
+      pub(base() + 'status', JSON.stringify(Object.assign(snap, { beat: now })), { retain: true });
     }
   }
   // Değişiklik olur olmaz gönder (zamanlayıcıya bağlı kalma: arka plandaki sayfada zamanlayıcılar yavaşlar)

@@ -206,7 +206,7 @@
   const hash = new URLSearchParams(location.hash.slice(1));
   const room = hash.get('r') || '';
   const secret = hash.get('k') || '';
-  const broker = BROKERS[Math.min(+hash.get('b') || 0, BROKERS.length - 1)];
+  let bIdx = Math.min(+hash.get('b') || 0, BROKERS.length - 1); // önce QR koddaki sunucu; çalışmazsa diğerine geçilir
   const controls = () => document.querySelectorAll('#bPrev, #bNext, #srcs button, .seg button, #bBlank, #bFirst');
 
   let st = null;          // bilgisayarın bildirdiği son durum
@@ -231,24 +231,35 @@
   enable(false);
 
   // ---------- Bağlantı ----------
+  // Bilgisayar her iki sunucuya da yazar. Telefonun sunucusu 10 sn bağlanamazsa ya da bilgisayardan 25 sn haber
+  // gelmezse telefon kendiliğinden diğer sunucuya geçer: hutbe sırasında bir sunucu çökse de kumanda kesilmez.
+  let offlineSince = Date.now();
+  let clockOff = 0; // telefonun saati yanlışsa komutlar reddedilmesin: bilgisayarın saati esas alınır
   function connect() {
     if (!window.mqtt) { conn('İnternet yok', 'err'); $('#title').textContent = 'Kumanda yüklenemedi'; return; }
-    client = window.mqtt.connect(broker, { clientId: 'hutbe-tel-' + Math.random().toString(36).slice(2, 10), clean: true, connectTimeout: 8000, reconnectPeriod: 2000, keepalive: 20 });
-    client.on('connect', () => {
+    const c = window.mqtt.connect(BROKERS[bIdx], { clientId: 'hutbe-tel-' + Math.random().toString(36).slice(2, 10), clean: true, connectTimeout: 8000, reconnectPeriod: 2000, keepalive: 20 });
+    client = c;
+    c.on('connect', () => {
+      if (c !== client) return;
       connected = true;
-      client.subscribe([base + 'status', base + 'rows']);
+      offlineSince = 0;
+      lastMsgAt = Date.now();
+      c.subscribe([base + 'status', base + 'rows']);
       beat();
       send('ping', null, true);
       render();
     });
-    client.on('close', () => { connected = false; render(); });
-    client.on('offline', () => { connected = false; render(); });
-    client.on('message', (topic, payload) => {
+    const down = () => { if (c !== client) return; connected = false; if (!offlineSince) offlineSince = Date.now(); render(); };
+    c.on('close', down);
+    c.on('offline', down);
+    c.on('message', (topic, payload) => {
+      if (c !== client) return;
       let d;
       try { d = JSON.parse(String(payload)); } catch (e) { return; }
       lastMsgAt = Date.now();
       if (topic.endsWith('/rows') && Array.isArray(d)) { rows = d.map((x) => String(x)); renderList(); render(); return; }
       if (topic.endsWith('/status') && d && typeof d === 'object') {
+        if (Number.isFinite(d.beat) && d.online !== false) { const off = d.beat - Date.now(); clockOff = Math.abs(off) > 60000 ? off : 0; }
         // Basılan düğmenin onayı gelene kadar (en çok 1,5 sn) telefonun kendi tahmini ekranda kalsın, geri sıçramasın
         if (Date.now() < pendingUntil && st && d.cur !== st.cur && d.rev === st.prevRev) return;
         st = d;
@@ -276,6 +287,20 @@
       if (v && v.model) { myName = String(v.model).slice(0, 28) + ' ' + tag; $('#selfName').textContent = myName; beat(); }
     }).catch(() => {});
   }
+  function switchBroker() {
+    if (BROKERS.length < 2 || navigator.onLine === false) return;
+    const old = client;
+    client = null; connected = false;
+    try { old && old.end(true); } catch (e) { /* yok say */ }
+    bIdx = (bIdx + 1) % BROKERS.length;
+    offlineSince = Date.now();
+    connect();
+  }
+  setInterval(() => {
+    if (!connected && offlineSince && Date.now() - offlineSince > 10000) return switchBroker();
+    // Bağlı ama bilgisayardan haber yok (bilgisayarın bu sunucuyla bağlantısı kopmuş olabilir)
+    if (connected && st && st.online !== false && Date.now() - lastMsgAt > 25000) switchBroker();
+  }, 2000);
   function beat() { if (client && connected) client.publish(base + 'phone', JSON.stringify({ t: Date.now(), dev: me.id, name: myName, mic: PSR ? 1 : 0 })); }
   setInterval(beat, 8000);
   setInterval(render, 3000);
@@ -291,7 +316,7 @@
   function send(cmd, extra, quiet) {
     if (!client || !connected) { if (!quiet) toast('Bağlantı yok, yeniden bağlanıyor…'); return false; }
     if (!window.crypto || !crypto.subtle) { if (!quiet) toast('Bu tarayıcı güvenli bağlantıyı desteklemiyor.'); return false; }
-    const d = Object.assign({ cmd, id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7), t: Date.now() }, extra || {});
+    const d = Object.assign({ cmd, id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7), t: Date.now() + clockOff }, extra || {});
     const text = [d.cmd, d.id, d.t, d.i === undefined ? '' : d.i, d.on === undefined ? '' : d.on].join('|') + (d.x === undefined ? '' : '|' + d.x);
     // sırayla gönder: art arda basılan İleri'ler karışmasın
     outQ = outQ.then(() => signKey()).then((k) => crypto.subtle.sign('HMAC', k, new TextEncoder().encode(text)))
@@ -444,6 +469,7 @@
     const d = { dv: me.id, f: pmFinals.splice(0), n: pmInterim.slice(-600) };
     if (!pmAcked) d.s = 1; // bilgisayar bu oturumu kabul edene kadar "yeni başladı" bilgisi gider
     if (pmWait) d.w = 1;
+    if (document.visibilityState === 'hidden') d.h = 1;
     pmLast = Date.now();
     send('speech', { i: pmSess, on: true, x: JSON.stringify(d) }, true);
   }
@@ -521,8 +547,11 @@
     if (why) toast(why);
   }
   // Bilgisayar bu telefonu seçtiyse dinle, seçim kalktıysa bırak
+  let pmOffAt = 0;
   function pmCheck() {
     if (!st) return;
+    // Bilgisayarın bağlantısı bir an koparsa hemen bırakma: 15 sn bekle (geri gelince kaldığı yerden sürer)
+    if (st.online === false && pmOn) { if (!pmOffAt) pmOffAt = Date.now(); if (Date.now() - pmOffAt < 15000) return; } else pmOffAt = 0;
     const chosen = st.micDev === me.id && st.online !== false;
     if (!chosen) {
       pmHold = false;
@@ -575,7 +604,12 @@
   // Telefon ekranı kumanda açıkken kararmasın; uygulamaya geri dönünce hemen güncel durumu iste
   let lock = null;
   async function awake() { try { if (!lock && navigator.wakeLock && document.visibilityState === 'visible') { lock = await navigator.wakeLock.request('screen'); lock.addEventListener('release', () => { lock = null; }); } } catch (e) { /* desteklenmiyor */ } }
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { awake(); if (client && !connected) client.reconnect(); beat(); send('ping', null, true); } });
+  document.addEventListener('visibilitychange', () => {
+    if (pmOn) {
+      if (document.visibilityState === 'hidden') pmSend(); // bilgisayara "mikrofon telefonunun ekranı kapandı" de
+      else if (!pmWait && pm) { try { pm.start(); } catch (e) { /* zaten çalışıyor */ } pmSend(); }
+    }
+    if (document.visibilityState === 'visible') { awake(); if (client && !connected) client.reconnect(); beat(); send('ping', null, true); } });
   awake();
 
   connect();
