@@ -1301,6 +1301,7 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-13-dijital-mecrada-ahlak.json","date":
   let rec = null, listening = false, failures = 0;
   // Telefon mikrofonu: ikinci bir telefon imamı dinler, duyduğunu gönderir (js/kumanda-host.js). O sırada bilgisayarın mikrofonu kapalıdır.
   let phoneMic = false, phoneSess = 0, phoneMicAt = 0;
+  let micDev = '', micName = ''; // seçili dinleyici: 'pc', telefon kimliği ya da '' (kapalı); telefondaki kumandadan seçilir
   function setMic(text, st) { if ($('#micText').textContent !== text) notify(); $('#micText').textContent = text; $('#micPill').dataset.state = st; }
 
   // Mikrofonu bir kez alıp açık tutar; tanıma yeniden başlarken Chrome'un tekrar izin sormasını azaltır
@@ -1313,6 +1314,7 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-13-dijital-mecrada-ahlak.json","date":
 
   function startListening() {
     phoneMic = false; // bilgisayarın mikrofonu açıldı: telefon dinlemeyi bırakır
+    micDev = 'pc';
     holdMic(); // beklemeden: izin penceresi açık kalsa da dinleme başlar
     if (!SR) { setMic('Ses tanıma yok', 'err'); toast('Bu tarayıcı ses tanımayı desteklemiyor. Google Chrome veya Microsoft Edge kullanın.'); return; }
     rec = new SR();
@@ -1386,6 +1388,7 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-13-dijital-mecrada-ahlak.json","date":
   function stopListening() {
     listening = false;
     phoneMic = false;
+    micDev = '';
     try { rec && rec.stop(); } catch (err) { /* yok say */ }
     releaseMic();
     setMic('Mikrofon kapalı', 'off');
@@ -1395,30 +1398,42 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-13-dijital-mecrada-ahlak.json","date":
     releaseAwake();
   }
 
-  // Telefondan gelen ses. sess: telefonun dinleme oturumu; x: {f: kesinleşen sözler, n: ara sonuç, s: 1 = yeni başladı}.
-  // En son başlatan kazanır: yeni bir telefon başlarsa ya da bilgisayarda dinleme açılırsa önceki telefon bırakır.
+  // Telefon kumandasından "Sesi kim dinlesin?" seçimi: 'pc' (bu bilgisayar), telefon kimliği ya da '' (kapalı)
+  function selectMic(dev, name) {
+    if (dev === (listening ? micDev : '')) return;
+    if (dev === '') { if (listening) stopListening(); return; }
+    if (dev === 'pc') { startListening(); return; }
+    if (listening && !phoneMic) { listening = false; try { rec && rec.stop(); } catch (err) { /* yok say */ } releaseMic(); }
+    micDev = dev;
+    micName = name || 'telefon';
+    phoneMic = true;
+    phoneSess = 0;
+    phoneMicAt = Date.now();
+    listening = true;
+    failures = 0;
+    tracker.resetInterim();
+    syncTracker();
+    setMic('Telefon mikrofonu başlatılıyor…', 'on');
+    updateListenBtn();
+    keepAwake();
+    channel?.postMessage({ type: 'listening', from: TAB_ID });
+    toast('İmamı artık telefon dinliyor: ' + micName);
+  }
+  // Seçili telefondan gelen ses. sess: telefonun dinleme oturumu; x: {dv: telefon kimliği, f: kesinleşen sözler, n: ara sonuç,
+  // s: 1 = yeni başladı, w: 1 = telefonda "başlatmak için dokunun" bekleniyor}. Seçili olmayan telefonun sesi yok sayılır.
   function phoneSpeech(sess, on, x) {
     let d = {};
     try { d = x ? JSON.parse(x) : {}; } catch (e) { return; }
-    if (!d || typeof d !== 'object') return;
-    if (!on) { if (phoneMic && sess === phoneSess) { stopListening(); toast('Telefon mikrofonu kapatıldı.'); } return; }
+    if (!d || typeof d !== 'object' || !phoneMic || d.dv !== micDev) return;
+    if (!on) { if (sess === phoneSess) { stopListening(); toast('Telefon mikrofonu telefondan kapatıldı.'); } return; }
     if (sess !== phoneSess) {
-      if (!d.s) return; // eski ya da bırakılmış bir telefon oturumu
-      const hadPc = listening && !phoneMic;
-      if (hadPc) { listening = false; try { rec && rec.stop(); } catch (err) { /* yok say */ } releaseMic(); }
+      if (!d.s) return; // eski bir oturum
       phoneSess = sess;
-      phoneMic = true;
-      listening = true;
-      failures = 0;
       tracker.resetInterim();
-      syncTracker();
-      updateListenBtn();
-      keepAwake();
-      channel?.postMessage({ type: 'listening', from: TAB_ID });
-      toast(hadPc ? 'İmamı artık telefon dinliyor; bilgisayarın mikrofonu kapatıldı.' : 'Telefon mikrofonu bağlandı: imamı telefon dinliyor.');
-    } else if (!phoneMic) return; // bu oturum durduruldu
+    }
     phoneMicAt = Date.now();
-    setMic('Telefon mikrofonu dinliyor', 'on');
+    if (d.w) { setMic('Telefonda "Dinlemeyi başlatmak için dokunun" düğmesine basın', 'err'); notify(); return; }
+    setMic('Telefon dinliyor: ' + micName, 'on');
     checkEnd();
     const fin = Array.isArray(d.f) ? d.f.filter((t) => typeof t === 'string').slice(0, 30).map((t) => t.slice(0, 1000)) : [];
     const interim = typeof d.n === 'string' ? d.n.slice(0, 1000) : '';
@@ -1947,7 +1962,9 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-13-dijital-mecrada-ahlak.json","date":
     get listening() { return listening; },
     get listenSrc() { return phoneMic ? 'phone' : listening ? 'pc' : ''; },
     get phoneSess() { return phoneMic ? phoneSess : 0; },
+    get micDev() { return listening ? micDev : ''; },
     phoneSpeech: (sess, on, x) => phoneSpeech(sess, on, x),
+    selectMic: (dev, name) => selectMic(dev, name),
     micText: () => $('#micText').textContent,
     heard: () => $('#heard').textContent,
     next: () => next(),
@@ -2263,6 +2280,14 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-13-dijital-mecrada-ahlak.json","date":
     if (topic.endsWith('/phone')) {
       const was = phoneLive();
       phoneSeen = Date.now();
+      // Telefon kendini tanıtır: ana kumandadaki "Sesi kim dinlesin?" listesine girer
+      try {
+        const p = JSON.parse(String(payload));
+        if (p && typeof p.dev === 'string' && /^[a-z0-9]{6,16}$/.test(p.dev)) {
+          if (!devices.has(p.dev) && devices.size > 30) devices.delete(devices.keys().next().value);
+          devices.set(p.dev, { n: String(p.name || 'Telefon').replace(/[\u0000-\u001f]/g, '').slice(0, 40), m: p.mic ? 1 : 0, at: Date.now() });
+        }
+      } catch (e) { /* eski telefon sayfası */ }
       if (!was) { setState('Telefon bağlı', 'on'); App.toast('Telefon kumandası bağlandı'); }
       return;
     }
@@ -2276,6 +2301,7 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-13-dijital-mecrada-ahlak.json","date":
       apply(d);
     });
   }
+  const devices = new Map(); // telefon kimliği -> { n: ad, m: ses tanıma var mı, at: son görülme }
   let queue = Promise.resolve();
   let rejected = 0;
   function apply(d) {
@@ -2292,6 +2318,7 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-13-dijital-mecrada-ahlak.json","date":
       case 'listen': App.listen(on); break;
       case 'splash': App.splash(on); break;
       case 'blank': App.blank(on); break;
+      case 'mic': if (typeof d.x === 'string' && (d.x === '' || d.x === 'pc' || /^[a-z0-9]{6,16}$/.test(d.x))) App.selectMic(d.x, (devices.get(d.x) || {}).n); break;
       case 'speech': if (Number.isInteger(d.i) && (d.x === undefined || typeof d.x === 'string')) App.phoneSpeech(d.i, on, d.x || ''); return; // sık gelir: durum zorla gönderilmez
       case 'ping': break;
       default: return;
@@ -2318,6 +2345,8 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-13-dijital-mecrada-ahlak.json","date":
       autoBlank: !!st.autoBlank,
       src: App.listenSrc,            // 'phone': imamı telefon dinliyor, 'pc': bilgisayarın mikrofonu
       sess: App.phoneSess,
+      micDev: App.micDev,            // seçili dinleyici: 'pc', telefon kimliği ya da '' (kapalı)
+      devs: [...devices].filter(([, v]) => Date.now() - v.at < 25000).map(([d, v]) => ({ d, n: v.n, m: v.m })),
       speech: (st.languages.find((l) => l.code === code) || {}).speech || 'tr-TR',
       rev: st.rev || 0,
     };
