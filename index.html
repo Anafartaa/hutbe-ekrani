@@ -1576,6 +1576,22 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-13-dijital-mecrada-ahlak.json","date":
     for (let i = 0; i < t.length; i++) x = (x * 31 + t.charCodeAt(i)) | 0;
     return t.length + ':' + x;
   }
+  function fillMissing(h) {
+    const tl = state.trackLang;
+    const src = new Map(h.data.rows.map((r) => [r[tl], r]));
+    let n = 0;
+    state.rows.forEach((r) => {
+      const o = src.get(r[tl]);
+      if (!o) return;
+      for (const k of Object.keys(o)) if (k !== tl && o[k] && !r[k]) { r[k] = o[k]; n++; }
+    });
+    if (!n) return 0;
+    for (const k of Object.keys(h.data.sources || {})) if (h.data.sources[k] && !state.sources[k]) state.sources[k] = h.data.sources[k];
+    commit({ keepTracker: true });
+    if (!$('#tab-texts').hidden && !(document.activeElement && document.activeElement.closest && document.activeElement.closest('#rowsTable'))) renderRows();
+    toast('Eksik çeviriler tamamlandı (' + n + ' hücre)');
+    return n;
+  }
   function offerNewest() {
     if (!READY.length || !state.rows.length) return;
     if (!state.readyFile) { // eski sürümden kalan kayıt: hangi hazır hutbe olduğunu metinden bul
@@ -1583,6 +1599,9 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-13-dijital-mecrada-ahlak.json","date":
       const hit = READY.find((h) => h.data.rows[0] && h.data.rows[0][state.trackLang] === first);
       if (hit) { state.readyFile = hit.file; persist(); }
     }
+    // Aynı hutbede sonradan dolan hücreler (ör. Diyanet'in geç gelen Arapçası, birleşen satırın Moğolcası): yalnızca boş
+    // hücreler doldurulur; yazılı hiçbir şey ve okunan cümle değişmez, bu yüzden hutbe okunurken de güvenli
+    if (state.readyFile === READY[0].file) fillMissing(READY[0]);
     if (listening) return;
     if (state.readyFile === READY[0].file) {
       // Aynı hutbenin düzeltilmiş hali: hutbe henüz başlamadıysa (ilk cümle/açılış) güncel metni yükle
