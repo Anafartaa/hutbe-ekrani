@@ -2270,8 +2270,8 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-13-dijital-mecrada-ahlak.json","date":
 
   // ---------- Vaaz: imamın konuşması canlı çevrilir ----------
   // Ses tanımadan gelen her kesin parça (imam durunca) bir "cümle" olur; çok kısaysa sonrakiyle birleştirilir, çok uzunsa bölünür.
-  // Her cümle sunucudaki çeviri fonksiyonuna (supabase/functions/vaaz-cevir, Claude) gider: Türkçesi düzeltilir, ekrandaki
-  // dillere çevrilir. Projeksiyon en son çevrilen cümleyi gösterir. Çeviri yalnızca hesapla giriş yapılmışsa çalışır.
+  // Her cümle sunucudaki çeviri fonksiyonuna (supabase/functions/vaaz-cevir, ChatGPT) gider: Türkçesi düzeltilir, ekrandaki
+  // dillere çevrilir (ChatGPT / OpenAI). Projeksiyon en son çevrilen cümleyi gösterir. Çeviri yalnızca hesapla giriş yapılmışsa çalışır.
   function isVaaz() { return state.mode === 'vaaz'; }
   function vz() {
     if (!state.vaaz || !Array.isArray(state.vaaz.items)) state.vaaz = { items: [], cur: -1, title: vaazTitle() };
@@ -2281,7 +2281,7 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-13-dijital-mecrada-ahlak.json","date":
     const d = new Date(), p = (n) => String(n).padStart(2, '0');
     return `Vaaz (${p(d.getDate())}.${p(d.getMonth() + 1)}.${d.getFullYear()})`;
   }
-  const VAAZ_MAX_WORDS = 30;    // bundan uzun parça bölünür (ekranda okunur kalsın)
+  const VAAZ_MAX_WORDS = 24;    // bundan uzun parça bölünür (çeviri hızlı gelsin, ekranda okunur kalsın)
   const VAAZ_MIN_WORDS = 4;     // bundan kısa parça bir sonrakini bekler
   const VAAZ_WAIT_MS = 2500;    // kısa parça en çok bu kadar bekler
   let vbuf = '', vbufTimer = null, vaazManualAt = 0, vaazErrShown = '';
@@ -2319,8 +2319,9 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-13-dijital-mecrada-ahlak.json","date":
   const VAAZ_ERR = {
     hesap: 'Vaaz çevirisi için Ayarlar → Hesap bölümünden imam hesabıyla giriş yapın.',
     hesap_yok: 'Vaaz çevirisi için Ayarlar → Hesap bölümünden imam hesabıyla giriş yapın.',
-    anahtar_yok: 'Çeviri hizmeti henüz kurulmadı (Claude API anahtarı eklenmemiş).',
-    anahtar_gecersiz: 'Claude API anahtarı geçersiz ya da hesapta kredi yok.',
+    anahtar_yok: 'Çeviri hizmeti henüz kurulmadı (OpenAI API anahtarı eklenmemiş).',
+    anahtar_gecersiz: 'OpenAI API anahtarı geçersiz.',
+    kredi_yok: 'OpenAI hesabında kredi kalmadı; platform.openai.com > Billing bölümünden kredi yükleyin.',
     sinir: 'Bu hesabın bugünkü çeviri sınırı doldu.',
     yogun: 'Çeviri hizmeti şu an yoğun; birazdan yeniden denenecek.',
     ag: 'İnternet yok ya da çeviri sunucusuna ulaşılamadı.',
@@ -2351,7 +2352,7 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-13-dijital-mecrada-ahlak.json","date":
       }
     } catch (e) {
       if (!code) code = 'ag';
-      const retry = attempt < 2 && (code === 'ag' || code === 'yogun' || code === 'api' || code === 'sunucu' || status >= 500 && !/^anahtar/.test(code));
+      const retry = attempt < 2 && (code === 'ag' || code === 'yogun' || code === 'api' || code === 'sunucu' || status >= 500 && !/^anahtar|kredi/.test(code));
       if (retry) { setTimeout(() => vaazTranslate(it, attempt + 1), 1200 * (attempt + 1)); return; }
       it.durum = 'hata'; it.hata = code;
       vaazErr(code);
