@@ -290,7 +290,6 @@ table.langs .badge { font-size: 11px; font-weight: 600; text-transform: uppercas
         <select id="readyList"></select>
         <button id="btnUndo" class="ghost" disabled title="Son değişikliği geri al (Ctrl+Z)">↶ Geri al</button>
         <button id="btnRedo" class="ghost" disabled title="Geri alınanı yeniden yap (Ctrl+Y)">↷ İleri al</button>
-        <button id="btnNew" class="ghost" title="Arşivde olmayan bir hutbeyi PDF ya da metinle elle eklemek için">Elle hutbe ekle</button>
       </div>
     </div>
 
@@ -1676,12 +1675,7 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-13-dijital-mecrada-ahlak.json","date":
   function info(text) { const n = $('#alignInfo'); n.textContent = text; n.hidden = !text; }
 
   // ---------- Metinler ve eşleme ----------
-  $('#btnNew').onclick = () => {
-    const p = $('#newPanel');
-    p.hidden = !p.hidden;
-    $('#btnNew').textContent = p.hidden ? 'Elle hutbe ekle' : 'Paneli kapat';
-    if (!p.hidden) renderSources();
-  };
+  // Elle hutbe ekleme paneli (#newPanel) arayüzden kaldırıldı; hutbeler arşivden ve haftalık otomatik görevden gelir
 
   function renderSources() {
     $('#sources').innerHTML = state.languages.map((l) => {
