@@ -2277,8 +2277,35 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-20-merhamet.json","date":"20.11.2026",
   renderCami();
   if (cami) cloudPull();
 
+  // ---------- Doğru saat: bilgisayarın saatine güvenilmez ----------
+  // Gerçek saat sunucudan (Supabase, sunucu_saati) alınır; bilgisayarın saati yanlış ya da saat dilimi farklı olsa da
+  // hesaplar doğru yapılır. Saat dilimi sabit: Moğolistan (UTC+8, yaz saati uygulanmıyor). İnternet yoksa son bilinen fark kullanılır.
+  const MOSQUE_UTC_HOURS = 8;
+  const CLOCK_KEY = 'hutbe-ekran.saat';
+  let clockOff = 0;
+  try { clockOff = +(JSON.parse(localStorage.getItem(CLOCK_KEY) || '{}').off) || 0; } catch (e) { clockOff = 0; }
+  const trueNow = () => Date.now() + clockOff;
+  async function syncClock() {
+    try {
+      const t0 = Date.now();
+      const v = await rpc('sunucu_saati', {});
+      const t1 = Date.now();
+      if (!Number.isFinite(v) || t1 - t0 > 10000) return; // çok yavaş cevap: fark güvenilmez
+      clockOff = Math.round(v - (t0 + t1) / 2);
+      try { localStorage.setItem(CLOCK_KEY, JSON.stringify({ off: clockOff, at: Math.round(v) })); } catch (e) { /* kayıt yok */ }
+      updateLangBlock(true);
+    } catch (e) { /* internet yok: son bilinen fark kullanılır */ }
+  }
+  // Camide (Moğolistan) o anki tarih/saat: { y, m, d, h }
+  function mosqueNow() {
+    const t = new Date(trueNow() + MOSQUE_UTC_HOURS * 3600000);
+    return { y: t.getUTCFullYear(), m: t.getUTCMonth() + 1, d: t.getUTCDate(), h: t.getUTCHours() };
+  }
+  // Camideki saatle verilen günün belli saatinin gerçek zamanı (ms)
+  const mosqueTime = (y, m, d, h) => Date.UTC(y, m - 1, d, h) - MOSQUE_UTC_HOURS * 3600000;
+
   // ---------- Hutbe günü: geç gelen Arapça/İngilizce ekrana girmesin ----------
-  // Cuma (hutbe tarihi) sabah 06:00'da (bu bilgisayarın saatiyle) Arapça ya da İngilizce hâlâ yoksa, o dil o gün boyunca
+  // Cuma (hutbe tarihi) sabah 06:00'da (Moğolistan saatiyle, gerçek saate göre) Arapça ya da İngilizce hâlâ yoksa, o dil o gün boyunca
   // projeksiyonda gösterilmez; sonradan gelse bile (ör. hutbe ortasında) ekran birden değişmez. Ertesi gün arşivde görünür.
   const LATE_LANGS = ['ar', 'en'];
   const BLOCK_HOUR = 6;
@@ -2287,13 +2314,12 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-20-merhamet.json","date":"20.11.2026",
     let codes = [];
     const m = h && String(h.date || '').match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
     if (m) {
-      const day = new Date(+m[3], +m[2] - 1, +m[1]);
-      const from = new Date(+m[3], +m[2] - 1, +m[1], BLOCK_HOUR), to = new Date(+m[3], +m[2] - 1, +m[1] + 1);
-      const now = new Date();
+      const from = mosqueTime(+m[3], +m[2], +m[1], BLOCK_HOUR), to = mosqueTime(+m[3], +m[2], +m[1] + 1, 0);
+      const now = trueNow();
       if (now >= from && now < to) {
         // Karar o gün ilk kez 06:00'dan sonra bakıldığında verilir ve gün boyu değişmez
-        if (!state.langBlock || state.langBlock.file !== h.file || state.langBlock.day !== day.toDateString()) {
-          state.langBlock = { file: h.file, day: day.toDateString(), codes: LATE_LANGS.filter((c) => !state.rows.some((r) => String(r[c] || '').trim())) };
+        if (!state.langBlock || state.langBlock.file !== h.file || state.langBlock.day !== h.date) {
+          state.langBlock = { file: h.file, day: h.date, codes: LATE_LANGS.filter((c) => !state.rows.some((r) => String(r[c] || '').trim())) };
         }
         codes = state.langBlock.codes;
       }
@@ -2303,6 +2329,8 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-20-merhamet.json","date":"20.11.2026",
     if (send && prev !== JSON.stringify(codes)) { persist(); broadcast(); }
   }
   setInterval(() => updateLangBlock(true), 60000);
+  syncClock();
+  setInterval(syncClock, 30 * 60000);
 
   // ---------- Vaaz: imamın konuşması canlı çevrilir ----------
   // Ses tanımadan gelen her kesin parça (imam durunca) bir "cümle" olur; çok kısaysa sonrakiyle birleştirilir, çok uzunsa bölünür.
@@ -2314,8 +2342,8 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-20-merhamet.json","date":"20.11.2026",
     return state.vaaz;
   }
   function vaazTitle() {
-    const d = new Date(), p = (n) => String(n).padStart(2, '0');
-    return `Vaaz (${p(d.getDate())}.${p(d.getMonth() + 1)}.${d.getFullYear()})`;
+    const t = mosqueNow(), p = (n) => String(n).padStart(2, '0');
+    return `Vaaz (${p(t.d)}.${p(t.m)}.${t.y})`;
   }
   const VAAZ_MAX_WORDS = 24;    // bundan uzun parça bölünür (çeviri hızlı gelsin, ekranda okunur kalsın)
   const VAAZ_MIN_WORDS = 4;     // bundan kısa parça bir sonrakini bekler
