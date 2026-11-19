@@ -1635,6 +1635,31 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-20-merhamet.json","date":"20.11.2026",
     toast('Eksik çeviriler tamamlandı (' + n + ' hücre)');
     return n;
   }
+  // Hutbe ilerlemişse tamamını yeniden yüklemek yerine: cümle yapısı aynıysa güncellenen metinleri (düzeltilmiş çeviri, hareke vb.)
+  // yerinde al. Bulunulan cümle değişmez; elle yapılan düzeltmeler (hesap/arşiv) üzerine yazılmaz. Dinleme açıkken çalışmaz.
+  function refreshChanged(h) {
+    if (listening) return 0;
+    const tl = state.trackLang, src = h.data.rows;
+    if (src.length !== state.rows.length || src.some((r, i) => r[tl] !== state.rows[i][tl])) return 0; // yapı değişmiş: tam yükleme gerekir
+    const fx = loadFixes()[h.file] || {};
+    let n = 0;
+    state.rows.forEach((r, i) => {
+      for (const l of state.languages) {
+        const k = l.code;
+        if (k === tl || !(k in src[i])) continue;
+        if (fx[k] && fx[k][r[tl]] !== undefined) continue; // bu hücreyi kullanıcı düzeltmiş
+        if ((r[k] || '') !== (src[i][k] || '')) { r[k] = src[i][k] || ''; n++; }
+      }
+    });
+    if (!n) { state.readySig = sig(h); return 0; }
+    for (const k of Object.keys(h.data.sources || {})) state.sources[k] = h.data.sources[k];
+    state.readySig = sig(h);
+    commit({ keepTracker: true });
+    renderLive();
+    if (!$('#tab-texts').hidden && !(document.activeElement && document.activeElement.closest && document.activeElement.closest('#rowsTable'))) renderRows();
+    toast('Hutbe metinleri güncellendi (' + n + ' hücre)');
+    return n;
+  }
   function offerNewest() {
     if (!READY.length || !state.rows.length) return;
     if (!state.readyFile) { // eski sürümden kalan kayıt: hangi hazır hutbe olduğunu metinden bul
@@ -1651,7 +1676,8 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-20-merhamet.json","date":"20.11.2026",
       // Aynı hutbenin güncellenmiş hali ya da yeni eklenen bir dil (ör. Kazakça).
       // Hutbe başlamadıysa yeniden yükle; elle yapılan düzeltmeler arşivden geri uygulanır, silinmez.
       const changed = state.readySig !== sig(READY[0]) || hasMissing(READY[0]);
-      if (!changed || state.current > 0) return;
+      if (!changed) return;
+      if (state.current > 0) { refreshChanged(READY[0]); return; }
       syncFixes();
       loadReady(0);
       setSplash(true);
