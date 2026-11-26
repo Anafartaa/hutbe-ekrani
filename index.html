@@ -355,7 +355,7 @@ table.langs .badge { font-size: 11px; font-weight: 600; text-transform: uppercas
 
       <div class="group">
         <h3>Sunum kumandası</h3>
-        <p class="muted">Kumandadaki bir tuşla ses kaydını (dinlemeyi) başlatıp durdurabilirsiniz. "Tuşu tanıt"a basın, sonra kumandada kullanmak istediğiniz tuşa iki kez basın; program o tuşu kaydeder. Sağ/sol ok tuşları satır değiştirir.</p>
+        <p class="muted">Kumandadaki bir tuşla ses kaydını (dinlemeyi) başlatıp durdurabilirsiniz. "Tuşu tanıt"a basın, sonra kumandada kullanmak istediğiniz tuşa iki kez basın; program o tuşu kaydeder. Hesaba giriş yapılmışsa ayar hesaba da kaydedilir; hesaba giren her bilgisayarda kendiliğinden geçerli olur. Sağ/sol ok tuşları satır değiştirir.</p>
         <div class="field"><span class="label">Ses kaydı tuşu: <b id="listenKeys"></b></span>
           <div class="logo-row"><button id="btnKeyLearn" class="ghost">Tuşu tanıt</button><button id="btnKeyReset" class="ghost">Varsayılana dön</button></div>
         </div>
@@ -1344,7 +1344,8 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-27-yetim.json","date":"27.11.2026","ti
     if (keys.length) {
       listenKeys = keys;
       try { localStorage.setItem(KEY_STORE, JSON.stringify(keys)); } catch (e) { /* kayıt yok */ }
-      toast('Kaydedildi: ' + keys.map(keyLabel).join(' + '));
+      keysToAccount(keys);
+      toast('Kaydedildi: ' + keys.map(keyLabel).join(' + ') + (cami && cami.hesap ? ' (hesaba da kaydedildi)' : ''));
     }
     showKeys();
   }
@@ -1358,8 +1359,28 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-27-yetim.json","date":"27.11.2026","ti
   $('#btnKeyReset').onclick = () => {
     listenKeys = DEFAULT_KEYS;
     try { localStorage.removeItem(KEY_STORE); } catch (e) { /* kayıt yok */ }
+    keysToAccount(null);
     showKeys();
   };
+  // Hesaba giriş yapılmışsa tuş ayarı hesapta da saklanır: hesaba giren her bilgisayarda kendiliğinden geçerli olur.
+  // Düzeltmelerle aynı yoldan eşitlenir (özel kayıt: dosya "_ayarlar", dil "tus").
+  const SET_FILE = '_ayarlar';
+  function keysToAccount(keys) {
+    const all = loadFixes();
+    if (keys) all[SET_FILE] = Object.assign({}, all[SET_FILE], { tus: { dinleme: JSON.stringify(keys) } });
+    else if (all[SET_FILE]) { delete all[SET_FILE].tus; if (!Object.keys(all[SET_FILE]).length) delete all[SET_FILE]; }
+    saveFixes(all);
+    cloudSchedulePush();
+  }
+  function keysFromAccount() {
+    let k = null;
+    try { k = JSON.parse(((loadFixes()[SET_FILE] || {}).tus || {}).dinleme || 'null'); } catch (e) { k = null; }
+    if (!Array.isArray(k) || !k.length || !k.every((x) => typeof x === 'string' && x.length < 40)) return;
+    if (JSON.stringify(k) === JSON.stringify(listenKeys)) return;
+    listenKeys = k;
+    try { localStorage.setItem(KEY_STORE, JSON.stringify(k)); } catch (e) { /* kayıt yok */ }
+    showKeys();
+  }
   showKeys();
   // Dinleme sürerken sayfa yanlışlıkla yenilenmek/kapanmak istenirse tarayıcı soru sorar
   window.addEventListener('beforeunload', (e) => { if (listening) { e.preventDefault(); e.returnValue = ''; } });
@@ -2254,6 +2275,7 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-27-yetim.json","date":"27.11.2026","ti
       const changedNow = JSON.stringify(m[state.readyFile] || {}) !== JSON.stringify(loadFixes()[state.readyFile] || {});
       remote = m;
       saveFixes(JSON.parse(JSON.stringify(m)));
+      keysFromAccount();
       lastSync = Date.now(); cloudErr = '';
       if (changedNow) applyRemoteToRows();
     } catch (e) {
