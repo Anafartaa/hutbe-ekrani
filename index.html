@@ -1292,6 +1292,8 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-27-yetim.json","date":"27.11.2026","ti
     if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName)) return;
     if ($('#tab-live').hidden || !$('#ask').hidden) return;
     if (e.ctrlKey || e.altKey || e.metaKey) return;
+    // Sunum kumandasının ▶ (oynat) tuşu F5 gönderir: sayfayı yenilemesin, dinlemeyi başlatıp durdursun
+    if (e.key === 'F5') { e.preventDefault(); if (!e.repeat) $('#btnListen').click(); return; }
     if (['ArrowRight', 'PageDown', ' '].includes(e.key)) { e.preventDefault(); next(); }
     if (['ArrowLeft', 'PageUp'].includes(e.key)) { e.preventDefault(); prev(); }
     if (e.key === 'b' || e.key === 'B') goFirst();
