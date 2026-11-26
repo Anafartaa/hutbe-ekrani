@@ -1255,7 +1255,19 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-27-yetim.json","date":"27.11.2026","ti
     $('#btnBlank').setAttribute('aria-pressed', String(state.blank));
     persist();
     broadcast();
+    // Hutbe bitip ekran kendiliğinden kararınca dinleme kapanır; kumandayla geri dönülünce (ekran açılınca) aynı mikrofonla yeniden başlar
+    if (on && auto && listening) {
+      const p = phoneMic ? { dev: micDev, name: micName } : { dev: 'pc' };
+      stopListening();
+      endPaused = p;
+      toast('Hutbe bitti; dinleme kapandı. Geri dönerseniz yeniden başlar.');
+    } else if (!on && endPaused) {
+      const p = endPaused;
+      endPaused = null;
+      if (!listening) { selectMic(p.dev, p.name); toast('Dinleme yeniden başladı'); }
+    }
   }
+  let endPaused = null; // hutbe sonunda kapanan dinlemenin mikrofonu (geri dönülünce yeniden açılır)
   $('#btnBlank').onclick = () => setBlank(!state.blank);
 
   function go(i, fromTracker = false) {
@@ -1546,6 +1558,7 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-27-yetim.json","date":"27.11.2026","ti
 
   // Telefon kumandasından "Sesi kim dinlesin?" seçimi: 'pc' (bu bilgisayar), telefon kimliği ya da '' (kapalı)
   function selectMic(dev, name) {
+    if (dev === '') endPaused = null;
     if (dev === (listening ? micDev : '')) return;
     if (dev === '') { if (listening) stopListening(); return; }
     if (dev === 'pc') { startListening(); return; }
@@ -1645,7 +1658,7 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-27-yetim.json","date":"27.11.2026","ti
     try { localStorage.setItem('hutbe-mikrofon', JSON.stringify({ on: listening, t: Date.now() })); } catch (e) { /* kayıt yok */ }
   }
   setInterval(sendMic, 5000);
-  $('#btnListen').onclick = () => (listening ? stopListening() : startListening());
+  $('#btnListen').onclick = () => { endPaused = null; return listening ? stopListening() : startListening(); };
 
   // ---------- Hazır hutbeler ----------
 
