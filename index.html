@@ -361,7 +361,7 @@ table.langs .badge { font-size: 11px; font-weight: 600; text-transform: uppercas
         <h3>Mikrofon</h3>
         <p class="muted">İmamı hangi mikrofon dinlesin? Kablosuz yaka mikrofonu gibi takılı bir mikrofonu buradan seçin. "Sesi dene"ye basıp konuşun: çubuk hareket ediyorsa mikrofon çalışıyor. Seçim bu bilgisayarda saklanır.</p>
         <div class="field"><label for="optMic">Mikrofon</label><select id="optMic"><option value="">Bilgisayarın varsayılan mikrofonu</option></select></div>
-        <div class="logo-row"><button id="btnMicTest" class="ghost">Sesi dene</button><button id="btnMicRefresh" class="ghost">Listeyi yenile</button></div>
+        <div class="logo-row"><button id="btnMicTest" class="ghost">Sesi dene</button><button id="btnMicRefresh" class="ghost">Listeyi yenile</button><button id="btnTlog" class="ghost" title="Takip bir yerde takılırsa bu dosyayı indirip gönderin: son duyulan sözler ve cümle geçişleri">Takip kaydını indir</button></div>
         <div id="micLevel" class="mic-level" hidden><span></span></div>
         <p class="muted small">Seçim tanımaya geçmezse (eski tarayıcı) Windows'ta Ayarlar &gt; Ses &gt; Giriş bölümünden aynı mikrofonu varsayılan yapın.</p>
       </div>
@@ -1319,6 +1319,7 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-27-yetim.json","date":"27.11.2026","ti
   $('#btnBlank').onclick = () => setBlank(!state.blank);
 
   function go(i, fromTracker = false) {
+    if (!fromTracker) tlog('elle', { to: i + 1 });
     if (isVaaz()) return vaazGo(i, true);
     if (!state.rows.length) return;
     if (state.splash) setSplash(false);
@@ -1490,6 +1491,14 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-27-yetim.json","date":"27.11.2026","ti
     testStop = () => { cancelAnimationFrame(raf); clearTimeout(timer); s.getTracks().forEach((t) => t.stop()); ac.close(); bar.hidden = true; $('#btnMicTest').textContent = 'Sesi dene'; testStop = null; };
   }
   $('#btnMicTest').onclick = () => micTest();
+  $('#btnTlog').onclick = () => {
+    const txt = JSON.stringify({ hutbe: state.readyFile, cumleler: state.rows.length, kayit: tlogBuf }, null, 1);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([txt], { type: 'application/json' }));
+    a.download = 'takip-kaydi-' + new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-') + '.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  };
   fillMics();
   // Dinleme sürerken sayfa yanlışlıkla yenilenmek/kapanmak istenirse tarayıcı soru sorar
   window.addEventListener('beforeunload', (e) => { if (listening) { e.preventDefault(); e.returnValue = ''; } });
@@ -1543,12 +1552,25 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-27-yetim.json","date":"27.11.2026","ti
   preview.addEventListener('load', broadcast);
 
   // ---------- Ses takibi ----------
+  // Takip kaydı: takip bir yerde takılırsa ne olduğunu sonradan görebilmek için son olaylar saklanır
+  // (duyulan sözler, cümle geçişleri, takibin sıfırlanması, dinleme başla/dur, hatalar). Ayarlar > "Takip kaydını indir".
+  const TLOG_KEY = 'hutbe-takip-kaydi';
+  let tlogBuf = [];
+  try { tlogBuf = JSON.parse(localStorage.getItem(TLOG_KEY) || '[]') || []; } catch (e) { tlogBuf = []; }
+  let tlogDirty = false;
+  function tlog(type, data) {
+    tlogBuf.push(Object.assign({ t: new Date().toISOString(), y: type, c: state.current + 1 }, data || {}));
+    if (tlogBuf.length > 1500) tlogBuf.splice(0, tlogBuf.length - 1500);
+    tlogDirty = true;
+  }
+  setInterval(() => { if (!tlogDirty) return; tlogDirty = false; try { localStorage.setItem(TLOG_KEY, JSON.stringify(tlogBuf)); } catch (e) { /* yer yok */ } }, 5000);
   const tracker = new HutbeTracker.Tracker({
-    onChange: (i) => go(i, true),
+    onChange: (i) => { tlog('gecis', { to: i + 1 }); go(i, true); },
     onProgress: (i, p) => showProgress(i, p),
   });
   function syncTracker() {
     const code = trackLang().code;
+    if (listening) tlog('takip-sifirlandi', { neden: (new Error().stack || '').split('\n').slice(2, 4).map((s) => s.trim()).join(' < ') });
     tracker.setSentences(state.rows.map((r) => r[code] || ''), state.current);
   }
 
@@ -1595,6 +1617,7 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-27-yetim.json","date":"27.11.2026","ti
   function releaseMic() { if (micStream) { micStream.getTracks().forEach((t) => t.stop()); micStream = null; } }
 
   function startListening() {
+    tlog('dinleme-basladi', { mic: micSel ? 'secili' : 'varsayilan' });
     phoneMic = false; // bilgisayarın mikrofonu açıldı: telefon dinlemeyi bırakır
     micDev = 'pc';
     holdMic(); // beklemeden: izin penceresi açık kalsa da dinleme başlar
@@ -1614,7 +1637,7 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-27-yetim.json","date":"27.11.2026","ti
       let interim = '';
       for (let k = e.resultIndex; k < e.results.length; k++) {
         const r = e.results[k];
-        if (r.isFinal) { if (isVaaz()) vaazFinal(r[0].transcript); else tracker.addFinal(r[0].transcript); }
+        if (r.isFinal) { tlog('duyuldu', { s: r[0].transcript }); if (isVaaz()) vaazFinal(r[0].transcript); else tracker.addFinal(r[0].transcript); }
         else interim += r[0].transcript + ' ';
       }
       if (isVaaz()) vaazInterim(interim); else tracker.setInterim(interim);
@@ -1627,6 +1650,7 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-27-yetim.json","date":"27.11.2026","ti
       notify();
     };
     rec.onerror = (e) => {
+      tlog('hata', { e: e.error });
       if (phoneMic || e.error === 'no-speech' || e.error === 'aborted') return;
       if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
         listening = false; updateListenBtn();
@@ -1649,6 +1673,7 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-27-yetim.json","date":"27.11.2026","ti
       }
     };
     rec.onend = () => {
+      tlog('tanima-bitti', { dinleme: listening });
       checkEnd();
       tracker.resetInterim();
       // Art arda hata olursa her seferinde biraz daha bekleyerek yeniden dene (en çok 5 sn)
@@ -1670,6 +1695,7 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-27-yetim.json","date":"27.11.2026","ti
     channel?.postMessage({ type: 'listening', from: TAB_ID });
   }
   function stopListening() {
+    tlog('dinleme-durdu');
     listening = false;
     phoneMic = false;
     micDev = '';
