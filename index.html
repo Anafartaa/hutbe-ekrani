@@ -889,6 +889,9 @@ window.DISPLAY_HTML = "<!doctype html>\n<html lang=\"tr\">\n<head>\n<meta charse
         if (jumped) continue;
         // 3) Kayıp takibi geri bul
         if (this._resync(seg)) continue;
+        // 4) İmam ara verip (sohbet vb.) hutbenin başka bir yerinden (geriden ya da çok ileriden) okumaya başladı:
+        //    ekrandaki cümle bir süredir ilerlemiyorsa bütün hutbede ara
+        if (seg.length - 1 - lastMatchAt >= 6 && this._global(seg)) continue;
         return;
       }
     }
@@ -914,9 +917,41 @@ window.DISPLAY_HTML = "<!doctype html>\n<html lang=\"tr\">\n<head>\n<meta charse
       return false;
     }
 
+    // Son duyulan kelimeleri bütün hutbede arar; en az 5 kelime (cümle ortasında 6) sırasıyla uymalı.
+    // Geriye ancak bir satırın başından okununca dönülür. Birden çok yer uyarsa ekrandaki cümleye en yakını seçilir.
+    _global(seg) {
+      const win = seg.slice(-14);
+      if (win.length < 5) return false;
+      const base = this.startIdx + (seg.length - win.length);
+      let best = null;
+      for (let i = 0; i < this.sentences.length; i++) {
+        if (i === this.current) continue;
+        const sen = this.sentences[i];
+        if (sen.length < 5) continue;
+        let found = null;
+        for (let s = 0; s + 5 <= win.length && !found; s++) {
+          // Geriye yalnızca bir satırın BAŞINDAN okununca dönülür (iki cümlelik satırların ikinci yarısı geri atlatmasın)
+          for (let o = 0; o + 5 <= (i < this.current ? 5 : sen.length); o++) {
+            if (o > 0 && (i < this.current || sen[o].length < 4)) continue;
+            if (!similar(win[s], sen[o])) continue;
+            const { p, matched } = this._match(win.slice(s), sen.slice(o));
+            const long = sen.slice(o, o + p).filter((w) => w.length >= 4).length;
+            const need = o === 0 ? 5 : 6;
+            if (matched >= need && long >= need - 1 && matched / p >= 0.75) { found = { s, o }; break; }
+          }
+        }
+        if (found) {
+          const d = Math.abs(i - this.current);
+          if (!best || d < best.d) best = { i, d, s: found.s, o: found.o };
+        }
+      }
+      if (!best) return false;
+      return this._advance(best.i - this.current, base + best.s, best.o);
+    }
+
     _advance(step, newStart, skip = 0) {
       const next = this.current + step;
-      if (next >= this.sentences.length) return false;
+      if (next >= this.sentences.length || next < 0 || step === 0) return false;
       this.current = next;
       this.startIdx = newStart;
       this.skip = skip;
