@@ -249,6 +249,10 @@ table.langs .badge { font-size: 11px; font-weight: 600; text-transform: uppercas
 #liveList .vz-st.err { background: color-mix(in srgb, var(--danger, #b3392f) 15%, transparent); color: var(--danger, #b3392f); }
 #liveList li.vz-wait { opacity: .7; }
 #liveList li.vz-live { list-style: none; color: var(--muted); font-style: italic; padding: 8px 12px 12px 44px; min-height: 1.4em; }
+
+/* Ayarlar > Mikrofon: ses düzeyi çubuğu */
+.mic-level{height:10px;border-radius:6px;background:rgba(127,127,127,.2);overflow:hidden;margin-top:10px}
+.mic-level>span{display:block;height:100%;width:0;background:#1fd65f;transition:width .08s linear}
 </style>
 </head>
 <body>
@@ -351,6 +355,15 @@ table.langs .badge { font-size: 11px; font-weight: 600; text-transform: uppercas
           <label class="check"><input type="checkbox" id="optNums"> Cümle numaralarını göster</label>
         </div>
         <div class="field"><label for="optLayout">Ekran düzeni</label><select id="optLayout"><option value="kart">Kartlı (her cümle ayrı blok)</option><option value="klasik">Klasik</option></select></div>
+      </div>
+
+      <div class="group">
+        <h3>Mikrofon</h3>
+        <p class="muted">İmamı hangi mikrofon dinlesin? Kablosuz yaka mikrofonu gibi takılı bir mikrofonu buradan seçin. "Sesi dene"ye basıp konuşun: çubuk hareket ediyorsa mikrofon çalışıyor. Seçim bu bilgisayarda saklanır.</p>
+        <div class="field"><label for="optMic">Mikrofon</label><select id="optMic"><option value="">Bilgisayarın varsayılan mikrofonu</option></select></div>
+        <div class="logo-row"><button id="btnMicTest" class="ghost">Sesi dene</button><button id="btnMicRefresh" class="ghost">Listeyi yenile</button></div>
+        <div id="micLevel" class="mic-level" hidden><span></span></div>
+        <p class="muted small">Seçim tanımaya geçmezse (eski tarayıcı) Windows'ta Ayarlar &gt; Ses &gt; Giriş bölümünden aynı mikrofonu varsayılan yapın.</p>
       </div>
 
       <div class="group">
@@ -1394,6 +1407,55 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-27-yetim.json","date":"27.11.2026","ti
     showKeys();
   }
   showKeys();
+  // ---------- Ayarlar: mikrofon seçimi ve ses düzeyi denemesi ----------
+  async function fillMics() {
+    const sel = $('#optMic');
+    if (!sel || !navigator.mediaDevices?.enumerateDevices) return;
+    let devs = [];
+    try { devs = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'audioinput' && d.deviceId !== 'default' && d.deviceId !== 'communications'); } catch (e) { devs = []; }
+    // İzin verilmeden cihaz adları boş gelir: bir kez izin isteyip yeniden listele
+    if (devs.length && !devs.some((d) => d.label) && !fillMics.asked) {
+      fillMics.asked = true;
+      try { const s = await navigator.mediaDevices.getUserMedia({ audio: true }); s.getTracks().forEach((t) => t.stop()); return fillMics(); } catch (e) { /* izin yok */ }
+    }
+    await resolveMicSel();
+    sel.innerHTML = '';
+    const def = document.createElement('option'); def.value = ''; def.textContent = 'Bilgisayarın varsayılan mikrofonu'; sel.appendChild(def);
+    devs.forEach((d, i) => { const o = document.createElement('option'); o.value = d.deviceId; o.textContent = d.label || ('Mikrofon ' + (i + 1)); sel.appendChild(o); });
+    if (micSel && !devs.some((d) => d.deviceId === micSel)) { const o = document.createElement('option'); o.value = micSel; o.textContent = (micSelLabel || 'Seçili mikrofon') + ' (şu an takılı değil)'; sel.appendChild(o); }
+    sel.value = micSel;
+  }
+  $('#optMic').onchange = () => {
+    micSel = $('#optMic').value;
+    micSelLabel = micSel ? $('#optMic').selectedOptions[0].textContent : '';
+    saveMicSel();
+    releaseMic();
+    // Dinleme sürüyorsa yeni mikrofonla yeniden başlat
+    if (listening && !phoneMic) { stopListening(); startListening(); }
+    toast('Mikrofon: ' + $('#optMic').selectedOptions[0].textContent);
+    if (testStop) { testStop(); micTest(); }
+  };
+  $('#btnMicRefresh').onclick = () => fillMics();
+  navigator.mediaDevices?.addEventListener?.('devicechange', () => fillMics());
+  let testStop = null;
+  async function micTest() {
+    if (testStop) { testStop(); return; }
+    let s;
+    try { s = await navigator.mediaDevices.getUserMedia({ audio: micSel ? { deviceId: { exact: micSel } } : true }); } catch (e) { toast('Mikrofona erişilemedi.'); return; }
+    const ac = new (window.AudioContext || window.webkitAudioContext)();
+    const an = ac.createAnalyser(); an.fftSize = 512;
+    ac.createMediaStreamSource(s).connect(an);
+    const buf = new Uint8Array(an.fftSize);
+    const bar = $('#micLevel'); bar.hidden = false;
+    let raf = 0;
+    const tick = () => { an.getByteTimeDomainData(buf); let m = 0; for (const v of buf) m = Math.max(m, Math.abs(v - 128)); bar.firstElementChild.style.width = Math.min(100, m / 1.0) + '%'; raf = requestAnimationFrame(tick); };
+    tick();
+    $('#btnMicTest').textContent = 'Denemeyi bitir';
+    const timer = setTimeout(() => testStop && testStop(), 20000);
+    testStop = () => { cancelAnimationFrame(raf); clearTimeout(timer); s.getTracks().forEach((t) => t.stop()); ac.close(); bar.hidden = true; $('#btnMicTest').textContent = 'Sesi dene'; testStop = null; };
+  }
+  $('#btnMicTest').onclick = () => micTest();
+  fillMics();
   // Dinleme sürerken sayfa yanlışlıkla yenilenmek/kapanmak istenirse tarayıcı soru sorar
   window.addEventListener('beforeunload', (e) => { if (listening) { e.preventDefault(); e.returnValue = ''; } });
   window.addEventListener('keydown', (e) => {
@@ -1464,9 +1526,36 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-27-yetim.json","date":"27.11.2026","ti
 
   // Mikrofonu bir kez alıp açık tutar; tanıma yeniden başlarken Chrome'un tekrar izin sormasını azaltır
   let micStream = null;
+  // Ayarlar > Mikrofon: hangi ses girişi dinlensin (ör. kablosuz yaka mikrofonunun alıcısı). Boş = sistemin varsayılanı.
+  const MIC_SEL_KEY = 'hutbe-mikrofon-cihaz';
+  // Kayıt: {id, label}. Cihaz kimliği bazen değişir (tarayıcı verisi silinince); o zaman aynı adlı mikrofon bulunur.
+  let micSel = '', micSelLabel = '';
+  try { const m = JSON.parse(localStorage.getItem(MIC_SEL_KEY) || 'null'); if (m && m.id) { micSel = m.id; micSelLabel = m.label || ''; } } catch (e) { micSel = ''; }
+  function saveMicSel() { try { if (micSel) localStorage.setItem(MIC_SEL_KEY, JSON.stringify({ id: micSel, label: micSelLabel })); else localStorage.removeItem(MIC_SEL_KEY); } catch (e) { /* kayıt yok */ } }
+  async function resolveMicSel() {
+    if (!micSel || !micSelLabel || !navigator.mediaDevices?.enumerateDevices) return;
+    try {
+      const ins = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'audioinput');
+      if (ins.some((d) => d.deviceId === micSel)) return;
+      const same = ins.find((d) => d.label && d.label === micSelLabel);
+      if (same) { micSel = same.deviceId; saveMicSel(); }
+    } catch (e) { /* yok say */ }
+  }
   async function holdMic() {
     if (micStream || !navigator.mediaDevices?.getUserMedia) return;
-    try { micStream = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch (e) { /* izin yoksa tanıma kendisi bildirir */ }
+    await resolveMicSel();
+    try {
+      micStream = await navigator.mediaDevices.getUserMedia({ audio: micSel ? { deviceId: { exact: micSel } } : true });
+    } catch (e) {
+      // Seçili mikrofon takılı değilse varsayılana dön
+      try { micStream = await navigator.mediaDevices.getUserMedia({ audio: true }); if (micSel) toast('Seçili mikrofon bulunamadı; varsayılan mikrofon kullanılıyor.'); } catch (err) { /* izin yoksa tanıma kendisi bildirir */ }
+    }
+  }
+  // Ses tanımaya seçili mikrofonu ver (Chrome'un yeni sürümleri destekler; desteklemeyen tarayıcı varsayılan mikrofonu kullanır)
+  function recStart() {
+    const t = micSel && micStream && micStream.getAudioTracks()[0];
+    if (t && t.readyState === 'live') { try { rec.start(t); return; } catch (e) { if (e && e.name === 'InvalidStateError') throw e; } }
+    rec.start();
   }
   function releaseMic() { if (micStream) { micStream.getTracks().forEach((t) => t.stop()); micStream = null; } }
 
@@ -1531,11 +1620,13 @@ window.HAZIR_HUTBELER = [{"file":"2026-11-27-yetim.json","date":"27.11.2026","ti
       // Hata yoksa HEMEN yeniden başlat: Chrome arkadaki sayfaların zamanlayıcılarını dakikada bire kadar
       // yavaşlatır (projeksiyon öndeyken kontrol sayfası arkada kalır); setTimeout ile beklemek takibi geciktiriyordu.
       if (!listening || phoneMic) return;
-      if (failures === 0) { try { rec.start(); return; } catch (err) { /* hemen başlamazsa aşağıda kısa bekleyip dene */ } }
-      setTimeout(() => { try { if (listening && !phoneMic) rec.start(); } catch (err) { /* zaten çalışıyor */ } }, Math.min(5000, 150 + failures * 700));
+      if (failures === 0) { try { recStart(); return; } catch (err) { /* hemen başlamazsa aşağıda kısa bekleyip dene */ } }
+      setTimeout(() => { try { if (listening && !phoneMic) recStart(); } catch (err) { /* zaten çalışıyor */ } }, Math.min(5000, 150 + failures * 700));
     };
     failures = 0;
-    try { rec.start(); } catch (err) { /* yok say */ }
+    // Seçili mikrofon varsa önce o alınır, tanıma onunla başlar
+    if (micSel && !micStream) { const r = rec; holdMic().then(() => { if (listening && !phoneMic && rec === r) { try { recStart(); } catch (err) { /* yok say */ } } }); }
+    else { try { recStart(); } catch (err) { /* yok say */ } }
     listening = true;
     syncTracker();
     setMic('Dinleniyor', 'on');
